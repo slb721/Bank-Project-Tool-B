@@ -1,5 +1,3 @@
-// pages/dashboard.js
-
 import { useState } from 'react';
 import BalanceForm from '../components/BalanceForm';
 import PaycheckForm from '../components/PaycheckForm';
@@ -7,9 +5,7 @@ import CardForm from '../components/CardForm';
 import Projections from '../components/Projections';
 
 export default function Dashboard() {
-  // Simple counter; bump it after each save so children can re-fetch.
   const [refresh, setRefresh] = useState(0);
-
   const bumpRefresh = () => setRefresh((v) => v + 1);
 
   return (

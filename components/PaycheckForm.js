@@ -12,7 +12,6 @@ export default function PaycheckForm({ onSave }) {
   const [paychecks, setPaychecks] = useState([]);
   const [editingId, setEditingId] = useState(null);
 
-  // 1. Fetch all paychecks for this user on mount & after any change
   useEffect(() => {
     fetchPaychecks();
   }, []);
@@ -22,14 +21,10 @@ export default function PaycheckForm({ onSave }) {
       .from('paychecks')
       .select('*')
       .eq('user_id', TEST_USER_ID);
-    if (error) {
-      console.error('Error fetching paychecks:', error.message);
-    } else {
-      setPaychecks(data);
-    }
+    if (error) console.error('Error fetching paychecks:', error.message);
+    else setPaychecks(data);
   };
 
-  // 2. Start editing a specific paycheck
   const startEdit = (pc) => {
     setEditingId(pc.id);
     setAmount(pc.amount);
@@ -46,19 +41,16 @@ export default function PaycheckForm({ onSave }) {
     setMessage('');
   };
 
-  // 3. Save (insert new or update existing)
   const handleSave = async (e) => {
     e.preventDefault();
     setLoading(true);
     setMessage('');
 
-    // Ensure profile exists for FK
     await supabase
       .from('profiles')
       .upsert({ id: TEST_USER_ID, email: 'test@example.com' });
 
     if (editingId) {
-      // Update existing paycheck
       const { error } = await supabase
         .from('paychecks')
         .update({
@@ -78,7 +70,6 @@ export default function PaycheckForm({ onSave }) {
         onSave();
       }
     } else {
-      // Insert new paycheck
       const { error } = await supabase.from('paychecks').insert([
         {
           user_id: TEST_USER_ID,
@@ -102,13 +93,9 @@ export default function PaycheckForm({ onSave }) {
     }
   };
 
-  // 4. Delete a paycheck
   const handleDelete = async (id) => {
     if (!confirm('Delete this paycheck?')) return;
-    const { error } = await supabase
-      .from('paychecks')
-      .delete()
-      .eq('id', id);
+    const { error } = await supabase.from('paychecks').delete().eq('id', id);
     if (error) {
       console.error('Error deleting paycheck:', error.message);
     } else {
@@ -184,8 +171,8 @@ export default function PaycheckForm({ onSave }) {
         <ul>
           {paychecks.map((pc) => (
             <li key={pc.id} style={{ marginBottom: 4 }}>
-              <strong>${pc.amount.toFixed(2)}</strong> — {pc.schedule} (Next:{' '}
-              {pc.next_date}){' '}
+              <strong>${parseFloat(pc.amount).toFixed(2)}</strong> — {pc.schedule}{' '}
+              (Next: {pc.next_date}){' '}
               <button
                 onClick={() => startEdit(pc)}
                 style={{ marginLeft: 8, fontSize: '0.8em' }}
