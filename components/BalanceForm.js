@@ -1,8 +1,9 @@
 // components/BalanceForm.js
+
 import { useState, useEffect } from 'react';
 import { supabase, TEST_USER_ID } from '../lib/supabaseClient';
 
-export default function BalanceForm() {
+export default function BalanceForm({ onSave }) {
   const [balance, setBalance] = useState('');
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
@@ -27,24 +28,24 @@ export default function BalanceForm() {
     setLoading(true);
     setMessage('');
 
-    // Make sure profile exists:
     await supabase
       .from('profiles')
       .upsert({ id: TEST_USER_ID, email: 'test@example.com' });
 
-    // Upsert into accounts
     const { error } = await supabase
       .from('accounts')
       .upsert(
         { user_id: TEST_USER_ID, current_balance: balance },
         { onConflict: 'user_id' }
       );
+
     setLoading(false);
     if (error) {
       console.error('Error saving balance:', error.message);
       setMessage('Error: ' + error.message);
     } else {
       setMessage('Balance saved.');
+      onSave(); // notify Dashboard to refresh projections
     }
   };
 

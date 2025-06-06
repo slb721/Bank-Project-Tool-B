@@ -1,9 +1,31 @@
+// components/Projections.js
+
 import { useEffect, useState } from 'react';
 import { supabase, TEST_USER_ID } from '../lib/supabaseClient';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+} from 'chart.js';
 import { Line } from 'react-chartjs-2';
 import { addWeeks, addMonths, parseISO, format } from 'date-fns';
 
-export default function Projections() {
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend
+);
+
+export default function Projections({ refresh }) {
   const [data, setData] = useState(null);
   const [lowPoint, setLowPoint] = useState(null);
   const [annualGrowth, setAnnualGrowth] = useState(null);
@@ -11,31 +33,37 @@ export default function Projections() {
 
   useEffect(() => {
     async function fetchAndCompute() {
-      const { data: acctData } = await supabase
+      const { data: acctData, error: acctErr } = await supabase
         .from('accounts')
         .select('*')
         .eq('user_id', TEST_USER_ID)
         .single();
+      if (!acctData) {
+        setData(null);
+        return;
+      }
+
       const { data: pcData } = await supabase
         .from('paychecks')
         .select('*')
         .eq('user_id', TEST_USER_ID);
+
       const { data: ccData } = await supabase
         .from('credit_cards')
         .select('*')
         .eq('user_id', TEST_USER_ID);
 
-      if (!acctData) return;
       let balance = parseFloat(acctData.current_balance);
       const today = new Date();
       let weeklyData = [];
       let minBal = balance;
       let minDate = today;
-      let firstBalance = balance;
+      const firstBalance = balance;
 
       for (let i = 0; i < 52; i++) {
         const weekDate = addWeeks(today, i);
 
+        // Paycheck recurrence
         for (const pc of pcData) {
           let nextPay = parseISO(pc.next_date);
           while (nextPay <= weekDate) {
@@ -47,11 +75,16 @@ export default function Projections() {
           }
         }
 
+        // Credit-card recurrence
         for (const cc of ccData) {
-          let due = parseISO(cc.next_due_date);
-          if (due >= weekDate && due < addWeeks(weekDate, 1)) {
-            balance -= parseFloat(cc.next_due_amount);
-            due = addMonths(due, 1);
+          let currDue = parseISO(cc.next_due_date);
+          while (currDue <= weekDate) {
+            if (format(currDue, 'yyyy-MM-dd') === cc.next_due_date) {
+              balance -= parseFloat(cc.next_due_amount);
+            } else {
+              balance -= parseFloat(cc.avg_future_amount);
+            }
+            currDue = addMonths(currDue, 1);
           }
         }
 
@@ -66,6 +99,7 @@ export default function Projections() {
       const lastBalance = weeklyData[weeklyData.length - 1].balance;
       const growth = ((lastBalance / firstBalance - 1) * 100).toFixed(2);
       setAnnualGrowth(growth);
+
       const negWeek = weeklyData.find((w) => w.balance < 0);
       if (negWeek) setNegativeAlert(negWeek.date);
 
@@ -85,14 +119,23 @@ export default function Projections() {
     }
 
     fetchAndCompute();
-  }, []);
+  }, [refresh]);
 
-  if (!data) return null;
+  if (!data) {
+    return <p>Loading projections…</p>;
+  }
 
   return (
     <div style={{ marginTop: 40 }}>
       <h2>12-Month Projection</h2>
-      <Line data={data} />
+      <Line
+        data={data}
+        options={{
+          scales: {
+            y: { beginAtZero: false }
+          }
+        }}
+      />
       <div style={{ marginTop: 20 }}>
         <p>
           <strong>Lowest Point:</strong> {format(lowPoint.date, 'MM/dd/yyyy')} at $
