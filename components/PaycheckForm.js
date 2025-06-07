@@ -1,233 +1,178 @@
 // components/PaycheckForm.js
-
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import styles from '../styles/Dashboard.module.css';
 
 export default function PaycheckForm({ onSave }) {
-  const [formData, setFormData] = useState({
-    amount: '',
-    schedule: 'monthly',
-    next_date: ''
-  });
-  const [paychecks, setPaychecks] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [amount, setAmount] = useState('');
+  const [schedule, setSchedule] = useState('bi-weekly');
+  const [nextDate, setNextDate] = useState('');
+  const [alert, setAlert] = useState('');
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  // Fetch existing paychecks on component mount
+  // Get current user and ensure profile exists
   useEffect(() => {
-    fetchPaychecks();
+    async function initializeUser() {
+      try {
+        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        
+        if (authError || !user) {
+          setAlert('User not authenticated');
+          setLoading(false);
+          return;
+        }
+
+        setUser(user);
+
+        // Ensure profile exists
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .upsert({
+            id: user.id,
+            email: user.email,
+            created_at: new Date().toISOString()
+          }, { 
+            onConflict: 'id',
+            ignoreDuplicates: true 
+          });
+
+        if (profileError) {
+          console.error('Profile creation error:', profileError);
+          setAlert('Failed to create user profile');
+        }
+
+      } catch (err) {
+        console.error('Initialization error:', err);
+        setAlert('Failed to initialize user');
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    initializeUser();
   }, []);
 
-  const fetchPaychecks = async () => {
-    try {
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      if (userError || !user) {
-        setError('User not authenticated');
-        return;
-      }
-
-      const { data, error } = await supabase
-        .from('paychecks')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('next_date', { ascending: true });
-
-      if (error) {
-        console.error('Error fetching paychecks:', error);
-        setError('Failed to fetch paychecks');
-      } else {
-        setPaychecks(data || []);
-      }
-    } catch (err) {
-      console.error('Unexpected error:', err);
-      setError('An unexpected error occurred');
-    }
-  };
-
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-    setSuccess('');
-
-    try {
-      // Get current user
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      if (userError || !user) {
-        setError('User not authenticated');
-        return;
-      }
-
-      const amount = parseFloat(formData.amount);
-      if (isNaN(amount) || amount <= 0) {
-        setError('Please enter a valid amount');
-        return;
-      }
-
-      if (!formData.next_date) {
-        setError('Please select a date');
-        return;
-      }
-
-      // Insert new paycheck
-      const { error } = await supabase
-        .from('paychecks')
-        .insert([{
-          user_id: user.id,
-          amount: amount,
-          schedule: formData.schedule,
-          next_date: formData.next_date,
-          created_at: new Date().toISOString()
-        }]);
-
-      if (error) {
-        console.error('Error inserting paycheck:', error);
-        setError('Failed to save paycheck');
-        return;
-      }
-
-      setSuccess('Paycheck saved successfully!');
-      setFormData({
-        amount: '',
-        schedule: 'monthly',
-        next_date: ''
-      });
-      
-      // Refresh the list
-      await fetchPaychecks();
-      onSave && onSave();
-
-      // Clear success message after 3 seconds
-      setTimeout(() => setSuccess(''), 3000);
-
-    } catch (err) {
-      console.error('Unexpected error:', err);
-      setError('An unexpected error occurred');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDelete = async (id) => {
-    if (!confirm('Are you sure you want to delete this paycheck?')) {
+  const handleSave = async () => {
+    if (!user) {
+      setAlert('User not authenticated');
       return;
     }
 
+    if (!amount || !schedule || !nextDate) {
+      setAlert('Please fill in all fields');
+      return;
+    }
+
+    setAlert('');
+
     try {
-      const { error } = await supabase
+      // Ensure profile exists
+      await supabase
+        .from('profiles')
+        .upsert({
+          id: user.id,
+          email: user.email,
+          created_at: new Date().toISOString()
+        }, { 
+          onConflict: 'id',
+          ignoreDuplicates: true 
+        });
+
+      // Save the paycheck
+      const payload = {
+        user_id: user.id,
+        amount: parseFloat(amount),
+        schedule: schedule,
+        next_date: nextDate
+      };
+
+      console.log('Saving paycheck payload:', payload);
+
+      const { data, error } = await supabase
         .from('paychecks')
-        .delete()
-        .eq('id', id);
+        .insert(payload);
 
       if (error) {
-        console.error('Error deleting paycheck:', error);
-        setError('Failed to delete paycheck');
-      } else {
-        setSuccess('Paycheck deleted successfully!');
-        await fetchPaychecks();
-        onSave && onSave();
-        setTimeout(() => setSuccess(''), 3000);
+        console.error('Save error:', error);
+        setAlert(`Failed to save: ${error.message}`);
+        return;
       }
+
+      console.log('Paycheck save successful:', data);
+      setAlert('Paycheck saved successfully!');
+      
+      // Clear form
+      setAmount('');
+      setSchedule('bi-weekly');
+      setNextDate('');
+      
+      if (onSave) onSave();
+
     } catch (err) {
-      console.error('Unexpected error:', err);
-      setError('An unexpected error occurred');
+      console.error('Unexpected save error:', err);
+      setAlert('Unexpected error occurred');
     }
   };
 
+  if (loading) {
+    return (
+      <div className={styles.card}>
+        <div>Loading...</div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className={styles.card}>
+        <div className={styles.alert}>Please log in to continue</div>
+      </div>
+    );
+  }
+
   return (
     <div className={styles.card}>
-      <h3>Paychecks</h3>
+      <h2 className={styles.heading}>Add Paycheck</h2>
+      
+      <div className={styles.formControl}>
+        <label>Amount</label>
+        <input
+          type="number"
+          step="0.01"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          placeholder="Paycheck amount"
+        />
+      </div>
 
-      {/* Existing Paychecks List */}
-      {paychecks.length > 0 && (
-        <div className={styles.itemsList}>
-          <h4>Your Paychecks:</h4>
-          {paychecks.map((paycheck) => (
-            <div key={paycheck.id} className={styles.listItem}>
-              <div>
-                <strong>${paycheck.amount}</strong> - {paycheck.schedule}
-                <br />
-                <small>Next: {new Date(paycheck.next_date).toLocaleDateString()}</small>
-              </div>
-              <button
-                onClick={() => handleDelete(paycheck.id)}
-                className={styles.deleteButton}
-                type="button"
-              >
-                Delete
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <form onSubmit={handleSubmit} className={styles.form}>
-        <div className={styles.formGroup}>
-          <label htmlFor="amount">Paycheck Amount:</label>
-          <input
-            type="number"
-            id="amount"
-            name="amount"
-            step="0.01"
-            value={formData.amount}
-            onChange={handleInputChange}
-            placeholder="Enter amount"
-            required
-            disabled={loading}
-          />
-        </div>
-
-        <div className={styles.formGroup}>
-          <label htmlFor="schedule">Schedule:</label>
-          <select
-            id="schedule"
-            name="schedule"
-            value={formData.schedule}
-            onChange={handleInputChange}
-            required
-            disabled={loading}
-          >
-            <option value="weekly">Weekly</option>
-            <option value="biweekly">Bi-weekly</option>
-            <option value="bimonthly">Bi-monthly</option>
-            <option value="monthly">Monthly</option>
-          </select>
-        </div>
-
-        <div className={styles.formGroup}>
-          <label htmlFor="next_date">Next Paycheck Date:</label>
-          <input
-            type="date"
-            id="next_date"
-            name="next_date"
-            value={formData.next_date}
-            onChange={handleInputChange}
-            required
-            disabled={loading}
-          />
-        </div>
-
-        {error && <div className={styles.error}>{error}</div>}
-        {success && <div className={styles.success}>{success}</div>}
-
-        <button 
-          type="submit" 
-          disabled={loading}
-          className={styles.button}
+      <div className={styles.formControl}>
+        <label>Schedule</label>
+        <select
+          value={schedule}
+          onChange={(e) => setSchedule(e.target.value)}
         >
-          {loading ? 'Saving...' : 'Add Paycheck'}
-        </button>
-      </form>
+          <option value="weekly">Weekly</option>
+          <option value="bi-weekly">Bi-weekly</option>
+          <option value="monthly">Monthly</option>
+          <option value="semi-monthly">Semi-monthly</option>
+        </select>
+      </div>
+
+      <div className={styles.formControl}>
+        <label>Next Paycheck Date</label>
+        <input
+          type="date"
+          value={nextDate}
+          onChange={(e) => setNextDate(e.target.value)}
+        />
+      </div>
+
+      <button className={styles.button} onClick={handleSave}>
+        Add Paycheck
+      </button>
+      
+      {alert && <div className={styles.alert}>{alert}</div>}
     </div>
   );
 }
