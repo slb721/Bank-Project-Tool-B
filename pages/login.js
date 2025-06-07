@@ -10,35 +10,26 @@ export default function Login() {
 
   const sendMagicLink = async () => {
     setMessage('');
-
-    // Build the URL we want Supabase to redirect back to:
     const dashboardUrl = `${window.location.origin}/dashboard`;
 
-    const { data, error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: dashboardUrl    // ← v2 key name
-      },
-    });
+    const { data, error } = await supabase.auth.signInWithOtp(
+      { email },
+      { emailRedirectTo: dashboardUrl }
+    );
 
-    if (error) {
-      setMessage(`Error: ${error.message}`);
-    } else {
-      setMessage('✅ Magic link sent! Check your email.');
-    }
+    if (error) setMessage(`Error: ${error.message}`);
+    else setMessage('✅ Magic link sent—check your email.');
   };
 
   return (
-    <div
-      style={{
-        maxWidth: 360,
-        margin: '10% auto',
-        padding: 24,
-        background: '#fff',
-        borderRadius: 8,
-        boxShadow: '0 4px 16px rgba(0,0,0,0.1)',
-      }}
-    >
+    <div style={{
+      maxWidth: 360,
+      margin: '10% auto',
+      padding: 24,
+      background: '#fff',
+      borderRadius: 8,
+      boxShadow: '0 4px 16px rgba(0,0,0,0.1)'
+    }}>
       <h2 style={{ marginBottom: 16 }}>Sign In</h2>
       <div className={styles.formControl}>
         <label>Email address</label>
@@ -46,19 +37,17 @@ export default function Login() {
           type="email"
           value={email}
           placeholder="you@example.com"
-          onChange={(e) => setEmail(e.target.value)}
+          onChange={e => setEmail(e.target.value)}
         />
       </div>
       <button className={styles.button} onClick={sendMagicLink}>
         Send Magic Link
       </button>
       {message && (
-        <p
-          style={{
-            marginTop: 12,
-            color: message.startsWith('Error') ? '#b91c1c' : '#2563eb',
-          }}
-        >
+        <p style={{
+          marginTop: 12,
+          color: message.startsWith('Error') ? '#b91c1c' : '#2563eb'
+        }}>
           {message}
         </p>
       )}
