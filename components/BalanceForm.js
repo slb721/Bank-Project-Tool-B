@@ -1,71 +1,56 @@
 // components/BalanceForm.js
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase, TEST_USER_ID } from '../lib/supabaseClient';
+import styles from '../styles/Dashboard.module.css';
 
 export default function BalanceForm({ onSave }) {
   const [balance, setBalance] = useState('');
-  const [message, setMessage] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [alert, setAlert] = useState('');
 
+  // Load existing balance on mount
   useEffect(() => {
-    supabase
-      .from('accounts')
-      .select('current_balance')
-      .eq('user_id', TEST_USER_ID)
-      .single()
-      .then(({ data, error }) => {
-        if (error && error.code !== 'PGRST116') {
-          console.error('Fetch balance error:', error.message);
-        } else if (data) {
-          setBalance(data.current_balance);
-        }
-      });
+    async function fetchBalance() {
+      const { data } = await supabase
+        .from('accounts')
+        .select('current_balance')
+        .eq('user_id', TEST_USER_ID)
+        .single();
+      if (data) setBalance(data.current_balance);
+    }
+    fetchBalance();
   }, []);
 
-  const handleSave = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setMessage('');
-
-    await supabase
-      .from('profiles')
-      .upsert({ id: TEST_USER_ID, email: 'test@example.com' });
-
+  const handleSave = async () => {
+    setAlert('');
+    const payload = {
+      user_id: TEST_USER_ID,
+      current_balance: balance,
+    };
     const { error } = await supabase
       .from('accounts')
-      .upsert(
-        { user_id: TEST_USER_ID, current_balance: balance },
-        { onConflict: 'user_id' }
-      );
-
-    setLoading(false);
-    if (error) {
-      console.error('Error saving balance:', error.message);
-      setMessage('Error: ' + error.message);
-    } else {
-      setMessage('Balance saved.');
-      onSave(); // notify Dashboard to refresh projections
-    }
+      .upsert(payload, { onConflict: ['user_id'] });
+    if (error) setAlert(error.message);
+    else onSave();
   };
 
   return (
-    <form onSubmit={handleSave} style={{ marginBottom: 20 }}>
-      <label>
-        Current Balance
+    <div className={styles.card}>
+      <h2 className={styles.heading}>Current Balance</h2>
+
+      <div className={styles.formControl}>
+        <label>Balance</label>
         <input
           type="number"
-          step="0.01"
           value={balance}
           onChange={(e) => setBalance(e.target.value)}
-          required
-          style={{ display: 'block', width: '100%', marginBottom: 8 }}
         />
-      </label>
-      <button type="submit" style={{ width: '100%' }} disabled={loading}>
-        {loading ? 'Saving…' : 'Save Balance'}
+      </div>
+
+      <button className={styles.button} onClick={handleSave}>
+        Save Balance
       </button>
-      {message && <p style={{ marginTop: 8 }}>{message}</p>}
-    </form>
+      {alert && <div className={styles.alert}>{alert}</div>}
+    </div>
   );
 }

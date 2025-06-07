@@ -3,9 +3,16 @@ import Link from 'next/link';
 
 export default function Home() {
   return (
-    <div style={{ textAlign: 'center', marginTop: '50px' }}>
+    <div style={{
+      minHeight: '100vh',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexDirection: 'column',
+      gap: '1rem'
+    }}>
       <h1>Bank Projection Tool</h1>
-      <p><Link href="/dashboard">Go to Dashboard</Link></p>
+      <Link href="/dashboard">Go to Dashboard</Link>
     </div>
   );
 }

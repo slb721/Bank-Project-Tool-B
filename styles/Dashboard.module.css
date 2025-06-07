@@ -1,0 +1,147 @@
+/* styles/Dashboard.module.css */
+
+/* Container */
+.container {
+  max-width: 900px;
+  margin: 2rem auto;
+  padding: 0 1rem;
+  font-family: 'Inter', sans-serif;
+  color: #1f2937;
+}
+
+/* Card */
+.card {
+  background: #ffffff;
+  border-radius: 1rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+  padding: 2rem;
+  margin-bottom: 2rem;
+}
+
+/* Section Heading */
+.heading {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 1.5rem;
+  color: #111827;
+}
+
+/* Form Controls */
+.formControl {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 1rem;
+}
+.formControl label {
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #374151;
+}
+.formControl input,
+.formControl select {
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.formControl input:focus,
+.formControl select:focus {
+  border-color: #3b82f6;
+}
+
+/* Buttons */
+.button {
+  display: inline-block;
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  font-weight: 500;
+  color: #ffffff;
+  background: #3b82f6;
+  border: none;
+  border-radius: 0.75rem;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+}
+.button:hover {
+  background: #2563eb;
+}
+.button:active {
+  transform: scale(0.98);
+}
+
+/* Small Secondary Button */
+.buttonSm {
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+  background: #f3f4f6;
+  color: #374151;
+  margin-left: 0.5rem;
+}
+.buttonSm:hover {
+  background: #e5e7eb;
+}
+
+/* Alert */
+.alert {
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  color: #b91c1c;
+}
+
+/* Chart Header */
+.chartHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+.chartTitle {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #111827;
+}
+.btnGroup button {
+  margin-left: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: #f3f4f6;
+  border: none;
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.btnGroup .active {
+  background: #3b82f6;
+  color: white;
+}
+
+/* Stats Grid */
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.5rem;
+  margin-top: 2rem;
+}
+.statCard {
+  background: #f9fafb;
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  text-align: center;
+}
+.statCard small {
+  font-size: 0.85rem;
+  color: #6b7280;
+}
+.statValue {
+  margin-top: 0.75rem;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #111827;
+}
+.statWarn {
+  margin-top: 0.5rem;
+  color: #b91c1c;
+  font-weight: 500;
+}
