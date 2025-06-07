@@ -4,22 +4,25 @@ import { supabase } from '../lib/supabaseClient';
 import styles from '../styles/Dashboard.module.css';
 
 export default function Login() {
-  const [email, setEmail]   = useState('');
+  const [email, setEmail]     = useState('');
   const [message, setMessage] = useState('');
 
   const sendMagicLink = async () => {
     setMessage('');
     const dashboardUrl = `${window.location.origin}/dashboard`;
-    console.log('>> Sending magic link for:', email, { emailRedirectTo: dashboardUrl });
+    console.log('>> Sending magic link with options:', {
+      email,
+      options: { emailRedirectTo: dashboardUrl }
+    });
 
-    // ⚠️ Use emailRedirectTo, not redirectTo
-    const { data, error } = await supabase.auth.signInWithOtp(
-      { email },
-      { emailRedirectTo: dashboardUrl }
-    );
+    // — single-object signature with nested options —
+    const { data, error } = await supabase.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: dashboardUrl }
+    });
 
     if (error) {
-      console.error(error);
+      console.error('Magic link error:', error);
       setMessage(`Error: ${error.message}`);
     } else {
       setMessage('✅ Magic link sent—check your email.');
