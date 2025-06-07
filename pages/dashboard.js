@@ -1,11 +1,19 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { useRouter } from 'next/router';
+import BalanceForm from '../components/BalanceForm';
+import PaycheckForm from '../components/PaycheckForm';
+import CardForm from '../components/CardForm';
+import Projections from '../components/Projections';
+import styles from '../styles/Dashboard.module.css';
 
 export default function Dashboard() {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [refresh, setRefresh] = useState(0);
   const router = useRouter();
+
+  const bump = () => setRefresh((v) => v + 1);
 
   useEffect(() => {
     // Get initial session
@@ -66,22 +74,32 @@ export default function Dashboard() {
   }
 
   return (
-    <div style={{ padding: '20px' }}>
-      <h1>Welcome to your dashboard!</h1>
-      <p>Email: {session.user.email}</p>
-      <button 
-        onClick={() => supabase.auth.signOut()}
-        style={{ 
-          padding: '10px 20px', 
-          backgroundColor: '#ff4444', 
-          color: 'white', 
-          border: 'none', 
-          borderRadius: '4px',
-          cursor: 'pointer'
-        }}
-      >
-        Sign Out
-      </button>
+    <div className={styles.container}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+        <h2>Your Dashboard</h2>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+          <span>Welcome, {session.user.email}</span>
+          <button 
+            onClick={() => supabase.auth.signOut()}
+            style={{ 
+              padding: '8px 16px', 
+              backgroundColor: '#ff4444', 
+              color: 'white', 
+              border: 'none', 
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '14px'
+            }}
+          >
+            Sign Out
+          </button>
+        </div>
+      </div>
+      
+      <BalanceForm onSave={bump} />
+      <PaycheckForm onSave={bump} />
+      <CardForm onSave={bump} />
+      <Projections refresh={refresh} />
     </div>
   );
 }
