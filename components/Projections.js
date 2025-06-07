@@ -1,4 +1,5 @@
 // components/Projections.js
+
 import React from 'react';
 import {
   Chart as ChartJS,
@@ -13,7 +14,7 @@ import {
 import { Chart } from 'react-chartjs-2';
 import styles from '../styles/Dashboard.module.css';
 
-// 1) register the controllers & elements
+// 1) Register Chart.js controllers & elements
 ChartJS.register(
   CategoryScale,
   LinearScale,
@@ -25,7 +26,7 @@ ChartJS.register(
 );
 
 export default function Projections() {
-  // 2) minimal test data
+  // 2) Minimal static dataset
   const data = {
     labels: ['Jun 1', 'Jun 8', 'Jun 15'],
     datasets: [
