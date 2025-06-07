@@ -11,7 +11,7 @@ export default function Login() {
   const sendMagicLink = async () => {
     setMessage('');
     const dashboardUrl = `${window.location.origin}/dashboard`;
-
+    console.log('>> Sending magic link for:', email, { redirectTo: `${window.location.origin}/dashboard` });
     const { data, error } = await supabase.auth.signInWithOtp(
       { email },
       { emailRedirectTo: dashboardUrl }
