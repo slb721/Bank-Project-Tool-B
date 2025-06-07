@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react';
-import { supabase } from '../lib/supabaseClient';
+// pages/dashboard.js
+
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
+import { supabase } from '../lib/supabaseClient';
 import BalanceForm from '../components/BalanceForm';
 import PaycheckForm from '../components/PaycheckForm';
 import CardForm from '../components/CardForm';
@@ -8,98 +10,96 @@ import Projections from '../components/Projections';
 import styles from '../styles/Dashboard.module.css';
 
 export default function Dashboard() {
-  const [session, setSession] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [refresh, setRefresh] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(null);
   const router = useRouter();
 
-  const bump = () => setRefresh((v) => v + 1);
-
   useEffect(() => {
-    // Get initial session
-    const getInitialSession = async () => {
-      const { data: { session }, error } = await supabase.auth.getSession();
-      console.log('Initial session check:', session, error);
-      
-      if (session) {
-        setSession(session);
+    const checkAuth = async () => {
+      try {
+        const { data: { user }, error } = await supabase.auth.getUser();
+        
+        if (error) {
+          console.error('Auth error:', error);
+          router.push('/login');
+          return;
+        }
+
+        if (!user) {
+          router.push('/login');
+          return;
+        }
+
+        setUser(user);
+      } catch (err) {
+        console.error('Unexpected auth error:', err);
+        router.push('/login');
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
 
-    getInitialSession();
+    checkAuth();
 
-    // Listen for auth changes (this is crucial for magic links)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log('Auth state changed:', event, session);
-        
-        if (event === 'SIGNED_IN') {
-          setSession(session);
-          setLoading(false);
-        } else if (event === 'SIGNED_OUT') {
-          setSession(null);
-          router.push('/login');
-        }
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT' || !session) {
+        router.push('/login');
+      } else if (event === 'SIGNED_IN' && session?.user) {
+        setUser(session.user);
       }
-    );
+    });
 
     return () => {
-      subscription.unsubscribe();
+      subscription?.unsubscribe();
     };
   }, [router]);
 
-  // Only redirect to login after we've confirmed there's no session AND not loading
-  useEffect(() => {
-    if (!loading && !session) {
-      console.log('No session found, redirecting to login');
-      router.push('/login');
+  const bump = () => setRefresh((v) => v + 1);
+
+  const handleSignOut = async () => {
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.error('Sign out error:', error);
+      }
+      // The auth state change listener will handle the redirect
+    } catch (err) {
+      console.error('Unexpected sign out error:', err);
     }
-  }, [loading, session, router]);
+  };
 
   if (loading) {
     return (
-      <div style={{ padding: '20px', textAlign: 'center' }}>
-        <p>Loading your dashboard...</p>
+      <div className={styles.container}>
+        <div className={styles.loading}>Loading...</div>
       </div>
     );
   }
 
-  if (!session) {
-    return (
-      <div style={{ padding: '20px', textAlign: 'center' }}>
-        <p>Redirecting to login...</p>
-      </div>
-    );
+  if (!user) {
+    return null; // Will redirect to login
   }
 
   return (
     <div className={styles.container}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+      <div className={styles.header}>
         <h2>Your Dashboard</h2>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-          <span>Welcome, {session.user.email}</span>
-          <button 
-            onClick={() => supabase.auth.signOut()}
-            style={{ 
-              padding: '8px 16px', 
-              backgroundColor: '#ff4444', 
-              color: 'white', 
-              border: 'none', 
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '14px'
-            }}
-          >
+        <div className={styles.userInfo}>
+          <span>Welcome, {user.email}</span>
+          <button onClick={handleSignOut} className={styles.signOutButton}>
             Sign Out
           </button>
         </div>
       </div>
       
-      <BalanceForm onSave={bump} />
-      <PaycheckForm onSave={bump} />
-      <CardForm onSave={bump} />
-      <Projections refresh={refresh} />
+      <div className={styles.dashboardGrid}>
+        <BalanceForm onSave={bump} />
+        <PaycheckForm onSave={bump} />
+        <CardForm onSave={bump} />
+        <Projections refresh={refresh} />
+      </div>
     </div>
   );
 }
