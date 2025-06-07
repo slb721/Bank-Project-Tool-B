@@ -1,3 +1,5 @@
+// components/Projections.js
+
 import React, { useEffect, useState } from 'react';
 import styles from '../styles/Dashboard.module.css';
 import { supabase, TEST_USER_ID } from '../lib/supabaseClient';
@@ -6,6 +8,8 @@ import {
   Chart as ChartJS,
   CategoryScale,
   LinearScale,
+  BarController,
+  LineController,
   BarElement,
   PointElement,
   LineElement,
@@ -25,7 +29,10 @@ import {
   startOfMonth,
 } from 'date-fns';
 
+// Register controllers and components
 ChartJS.register(
+  BarController,
+  LineController,
   CategoryScale,
   LinearScale,
   BarElement,
@@ -50,6 +57,7 @@ export default function Projections({ refresh }) {
 
   useEffect(() => {
     async function run() {
+      // 1) Fetch data
       const { data: acct } = await supabase
         .from('accounts')
         .select('current_balance')
@@ -67,6 +75,7 @@ export default function Projections({ refresh }) {
         .select('next_due_date, next_due_amount, avg_future_amount')
         .eq('user_id', TEST_USER_ID);
 
+      // 2) Build events over next 6 months
       const events = [];
       const horizonEnd = addMonths(startOfDay(new Date()), 6);
 
@@ -82,8 +91,8 @@ export default function Projections({ refresh }) {
       });
 
       ccs.forEach(({ next_due_date, next_due_amount, avg_future_amount }) => {
-        let dt = parseISO(next_due_date),
-          first = true;
+        let dt = parseISO(next_due_date);
+        let first = true;
         while (!isBefore(horizonEnd, dt)) {
           events.push({
             date: startOfDay(dt),
@@ -96,6 +105,7 @@ export default function Projections({ refresh }) {
 
       events.sort((a, b) => a.date - b.date);
 
+      // 3) Simulate daily balance
       const daily = [];
       let bal = +acct.current_balance,
         sim = 0,
@@ -122,12 +132,16 @@ export default function Projections({ refresh }) {
         }
         bal += flow;
         sim += flow;
-        if (bal < minBal) (minBal = bal), (minDate = d);
+        if (bal < minBal) {
+          minBal = bal;
+          minDate = d;
+        }
         if (!negDay && bal < 0) negDay = format(d, 'MM/dd/yyyy');
         if (sim < minSim) minSim = sim;
         daily.push({ date: d, bal, flow });
       }
 
+      // 4) Bucket by view
       const labels = [],
         dataBal = [],
         dataFlow = [],
@@ -158,6 +172,7 @@ export default function Projections({ refresh }) {
           dataFlow.push(wf);
         }
       } else {
+        // Monthly grouping
         const flowByMonth = {};
         events.forEach((e) => {
           const key = format(startOfMonth(e.date), 'yyyy-MM');
@@ -192,6 +207,7 @@ export default function Projections({ refresh }) {
         }
       }
 
+      // 5) Build datasets
       const datasets = [];
       if (view === 'monthly') {
         datasets.push(
@@ -238,6 +254,7 @@ export default function Projections({ refresh }) {
 
       setChartData({ labels, datasets });
 
+      // 6) Compute stats
       const finalBal = dataBal[dataBal.length - 1];
       const growth = (((finalBal / +acct.current_balance - 1) * 2 * 100) || 0).toFixed(2);
       const reqBal = Math.max(0, -minSim).toFixed(2);
