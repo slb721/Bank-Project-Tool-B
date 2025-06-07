@@ -11,20 +11,21 @@ export default function Login() {
   const sendMagicLink = async () => {
     setMessage('');
 
-    // Build the full URL we want Supabase to send you back to:
+    // Build the URL we want Supabase to redirect back to:
     const dashboardUrl = `${window.location.origin}/dashboard`;
 
--    const { data, error } = await supabase.auth.signInWithOtp({
--      email,
--      options: { redirectTo: dashboardUrl },
--    });
-+    const { data, error } = await supabase.auth.signInWithOtp({
-+      email,
-+      options: { emailRedirectTo: dashboardUrl },  // <-- v2 requires emailRedirectTo
-+    });
+    const { data, error } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: dashboardUrl    // ← v2 key name
+      },
+    });
 
-    if (error) setMessage(`Error: ${error.message}`);
-    else setMessage('✅ Magic link sent! Check your email.');
+    if (error) {
+      setMessage(`Error: ${error.message}`);
+    } else {
+      setMessage('✅ Magic link sent! Check your email.');
+    }
   };
 
   return (
