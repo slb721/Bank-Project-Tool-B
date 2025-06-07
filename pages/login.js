@@ -13,9 +13,9 @@ export default function Login() {
     const redirectUrl = "https://bank-project-tool-b.vercel.app/dashboard";
 
     const { error } = await supabase.auth.signInWithOtp({
-      email,
+      email: 'user@example.com',
       options: {
-        emailRedirectTo: redirectUrl,
+        emailRedirectTo: 'https://bank-project-tool-b.vercel.app/dashboard',
       },
     });
 

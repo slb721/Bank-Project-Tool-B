@@ -1,22 +1,22 @@
-// pages/dashboard.js
-import { useState } from 'react';
-import BalanceForm from '../components/BalanceForm';
-import PaycheckForm from '../components/PaycheckForm';
-import CardForm from '../components/CardForm';
-import Projections from '../components/Projections';
-import styles from '../styles/Dashboard.module.css';
+import { useEffect, useState } from 'react';
+import { supabase } from '../lib/supabaseClient';
+import { useRouter } from 'next/router';
 
 export default function Dashboard() {
-  const [refresh, setRefresh] = useState(0);
-  const bump = () => setRefresh((v) => v + 1);
+  const [session, setSession] = useState(null);
+  const router = useRouter();
 
-  return (
-    <div className={styles.container}>
-      <h2>Your Dashboard</h2>
-      <BalanceForm onSave={bump} />
-      <PaycheckForm onSave={bump} />
-      <CardForm onSave={bump} />
-      <Projections refresh={refresh} />
-    </div>
-  );
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) {
+        router.push('/login'); // No session = send to login
+      } else {
+        setSession(session);
+      }
+    });
+  }, []);
+
+  if (!session) return <p>Loading...</p>;
+
+  return <h1>Welcome to your dashboard</h1>;
 }
