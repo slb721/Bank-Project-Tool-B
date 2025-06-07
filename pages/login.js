@@ -1,4 +1,5 @@
 // pages/login.js
+
 import { useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import styles from '../styles/Dashboard.module.css';
@@ -9,16 +10,20 @@ export default function Login() {
 
   const sendMagicLink = async () => {
     setMessage('');
-    // Force the callback back to /dashboard on *this* origin:
+
+    // Force callback back to /dashboard on this exact origin:
     const redirectTo = `${window.location.origin}/dashboard`;
 
-    const { error } = await supabase.auth.signInWithOtp({
+    const { data, error } = await supabase.auth.signInWithOtp({
       email,
       options: { redirectTo },
     });
 
-    if (error) setMessage(`Error: ${error.message}`);
-    else setMessage('✅ Magic link sent! Check your email.');
+    if (error) {
+      setMessage(`Error: ${error.message}`);
+    } else {
+      setMessage('✅ Magic link sent! Check your email.');
+    }
   };
 
   return (
