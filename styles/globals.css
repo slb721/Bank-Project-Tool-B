@@ -1,17 +1,48 @@
 /* styles/globals.css */
+
+:root {
+  /* Typography */
+  --font-body: 'Inter', sans-serif;
+  /* Color Palette */
+  --color-bg: #f9fafb;
+  --color-surface: #ffffff;
+  --color-primary: #2563eb;
+  --color-primary-variant: #1e40af;
+  --color-on-primary: #ffffff;
+  --color-text: #111827;
+  --color-text-secondary: #4b5563;
+  --color-error: #b91c1c;
+  /* Elevation */
+  --shadow-light: 0 2px 8px rgba(0, 0, 0, 0.04);
+  --shadow-medium: 0 4px 16px rgba(0, 0, 0, 0.06);
+  /* Spacing scale */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
 html, body {
   margin: 0;
   padding: 0;
-  font-family: sans-serif;
-  background: #f3f4f6;
+  background: var(--color-bg);
+  font-family: var(--font-body);
+  color: var(--color-text);
 }
+
 a {
-  color: #2563eb;
+  color: var(--color-primary);
   text-decoration: none;
 }
 a:hover {
   text-decoration: underline;
 }
+
 input, select, button {
-  font-family: inherit;
+  font-family: var(--font-body);
 }

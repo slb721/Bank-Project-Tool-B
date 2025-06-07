@@ -1,23 +1,20 @@
 // pages/_document.js
+import { Html, Head, Main, NextScript } from 'next/document';
 
-import Document, { Html, Head, Main, NextScript } from 'next/document';
-
-export default class MyDocument extends Document {
-  render() {
-    return (
-      <Html>
-        <Head>
-          {/* Tailwind via CDNJS */}
-          <link
-            href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/3.3.2/tailwind.min.css"
-            rel="stylesheet"
-          />
-        </Head>
-        <body>
-          <Main />
-          <NextScript />
-        </body>
-      </Html>
-    );
-  }
+export default function Document() {
+  return (
+    <Html lang="en">
+      <Head>
+        {/* Inter font from Google */}
+        <link
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+          rel="stylesheet"
+        />
+      </Head>
+      <body>
+        <Main />
+        <NextScript />
+      </body>
+    </Html>
+  );
 }

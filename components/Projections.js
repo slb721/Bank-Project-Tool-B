@@ -1,5 +1,3 @@
-// components/Projections.js
-
 import React, { useEffect, useState } from 'react';
 import styles from '../styles/Dashboard.module.css';
 import { supabase, TEST_USER_ID } from '../lib/supabaseClient';
@@ -52,7 +50,6 @@ export default function Projections({ refresh }) {
 
   useEffect(() => {
     async function run() {
-      // 1) fetch account, paychecks, cards
       const { data: acct } = await supabase
         .from('accounts')
         .select('current_balance')
@@ -70,7 +67,6 @@ export default function Projections({ refresh }) {
         .select('next_due_date, next_due_amount, avg_future_amount')
         .eq('user_id', TEST_USER_ID);
 
-      // 2) build a flat list of all cash events over the next 6 months
       const events = [];
       const horizonEnd = addMonths(startOfDay(new Date()), 6);
 
@@ -80,6 +76,7 @@ export default function Projections({ refresh }) {
           events.push({ date: startOfDay(dt), amt: +amount });
           if (schedule === 'weekly') dt = addWeeks(dt, 1);
           else if (schedule === 'biweekly') dt = addWeeks(dt, 2);
+          else if (schedule === 'bimonthly') dt = addDays(dt, 15);
           else dt = addMonths(dt, 1);
         }
       });
@@ -99,7 +96,6 @@ export default function Projections({ refresh }) {
 
       events.sort((a, b) => a.date - b.date);
 
-      // 3) simulate daily balance and record min, negative day, etc.
       const daily = [];
       let bal = +acct.current_balance,
         sim = 0,
@@ -132,7 +128,6 @@ export default function Projections({ refresh }) {
         daily.push({ date: d, bal, flow });
       }
 
-      // 4) bucket into labels/data for daily, weekly or monthly
       const labels = [],
         dataBal = [],
         dataFlow = [],
@@ -163,8 +158,6 @@ export default function Projections({ refresh }) {
           dataFlow.push(wf);
         }
       } else {
-        // === MONTHLY grouping via a simple map-of-month-to-total-flow ===
-        // build a map: "YYYY-MM" → total amt in that month
         const flowByMonth = {};
         events.forEach((e) => {
           const key = format(startOfMonth(e.date), 'yyyy-MM');
@@ -172,7 +165,6 @@ export default function Projections({ refresh }) {
         });
 
         let runSum = +acct.current_balance;
-        // iterate each calendar month
         for (
           let m = startOfMonth(new Date());
           !isBefore(horizonEnd, m);
@@ -186,7 +178,6 @@ export default function Projections({ refresh }) {
           dataFlow.push(mf);
           dataBal.push(runSum);
 
-          // optional high/low/avg from daily array:
           const slice = daily.filter((p) => p.date >= m && p.date < addMonths(m, 1));
           if (slice.length) {
             const bals = slice.map((p) => p.bal);
@@ -201,7 +192,6 @@ export default function Projections({ refresh }) {
         }
       }
 
-      // 5) build chartData using mixed dataset types
       const datasets = [];
       if (view === 'monthly') {
         datasets.push(
@@ -248,7 +238,6 @@ export default function Projections({ refresh }) {
 
       setChartData({ labels, datasets });
 
-      // 6) compute overview stats
       const finalBal = dataBal[dataBal.length - 1];
       const growth = (((finalBal / +acct.current_balance - 1) * 2 * 100) || 0).toFixed(2);
       const reqBal = Math.max(0, -minSim).toFixed(2);

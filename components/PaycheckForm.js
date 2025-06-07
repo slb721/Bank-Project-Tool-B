@@ -1,5 +1,3 @@
-// components/PaycheckForm.js
-
 import React, { useState, useEffect } from 'react';
 import { supabase, TEST_USER_ID } from '../lib/supabaseClient';
 import styles from '../styles/Dashboard.module.css';
@@ -46,8 +44,9 @@ export default function PaycheckForm({ onSave }) {
       .from('paychecks')
       .upsert(payload, { onConflict: ['id'] });
 
-    if (error) setAlert(error.message);
-    else {
+    if (error) {
+      setAlert(error.message);
+    } else {
       setAmount('');
       setSchedule('biweekly');
       setNextDate('');
@@ -84,6 +83,7 @@ export default function PaycheckForm({ onSave }) {
         >
           <option value="weekly">Weekly</option>
           <option value="biweekly">Biweekly</option>
+          <option value="bimonthly">Bimonthly</option>
           <option value="monthly">Monthly</option>
         </select>
       </div>
@@ -102,9 +102,9 @@ export default function PaycheckForm({ onSave }) {
       </button>
       {alert && <div className={styles.alert}>{alert}</div>}
 
-      <ul>
+      <ul style={{ marginTop: '1rem' }}>
         {items.map((pc) => (
-          <li key={pc.id} style={{ marginTop: '0.5rem' }}>
+          <li key={pc.id} style={{ marginBottom: '0.75rem' }}>
             ${parseFloat(pc.amount).toFixed(2)} – {pc.schedule} next {pc.next_date}
             <button
               className={styles.buttonSm}
@@ -115,7 +115,11 @@ export default function PaycheckForm({ onSave }) {
             </button>
             <button
               className={styles.buttonSm}
-              style={{ marginLeft: '0.25rem', background: '#ef4444', color: 'white' }}
+              style={{
+                marginLeft: '0.25rem',
+                background: '#ef4444',
+                color: 'white',
+              }}
               onClick={() => handleDelete(pc.id)}
             >
               Delete
@@ -124,5 +128,5 @@ export default function PaycheckForm({ onSave }) {
         ))}
       </ul>
     </div>
-  );
+);
 }
