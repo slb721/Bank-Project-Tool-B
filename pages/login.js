@@ -1,64 +1,44 @@
-// pages/login.js
-import { useState } from 'react';
-import { supabase } from '../lib/supabaseClient';
-import styles from '../styles/Dashboard.module.css';
+import { useState } from "react";
+import { supabase } from "../lib/supabaseClient";
+import { useRouter } from "next/router";
 
 export default function Login() {
-  const [email, setEmail]     = useState('');
-  const [message, setMessage] = useState('');
+  const [email, setEmail] = useState("");
+  const [message, setMessage] = useState("");
+  const router = useRouter();
 
-  const sendMagicLink = async () => {
-    setMessage('');
-    const dashboardUrl = `${window.location.origin}/dashboard`;
-    console.log('>> Sending magic link with options:', {
-      email,
-      options: { emailRedirectTo: dashboardUrl }
-    });
+  const handleLogin = async (e) => {
+    e.preventDefault();
 
-    // — single-object signature with nested options —
-    const { data, error } = await supabase.auth.signInWithOtp({
+    const redirectUrl = "https://bank-project-tool-b.vercel.app/dashboard";
+
+    const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: dashboardUrl }
+      options: {
+        emailRedirectTo: redirectUrl,
+      },
     });
 
     if (error) {
-      console.error('Magic link error:', error);
-      setMessage(`Error: ${error.message}`);
+      setMessage("Login error: " + error.message);
     } else {
-      setMessage('✅ Magic link sent—check your email.');
+      setMessage("Check your email for the magic link.");
     }
   };
 
   return (
-    <div style={{
-      maxWidth: 360,
-      margin: '10% auto',
-      padding: 24,
-      background: '#fff',
-      borderRadius: 8,
-      boxShadow: '0 4px 16px rgba(0,0,0,0.1)'
-    }}>
-      <h2 style={{ marginBottom: 16 }}>Sign In</h2>
-      <div className={styles.formControl}>
-        <label>Email address</label>
+    <div>
+      <h1>Login</h1>
+      <form onSubmit={handleLogin}>
         <input
           type="email"
-          placeholder="you@example.com"
+          placeholder="Enter email"
           value={email}
-          onChange={e => setEmail(e.target.value)}
+          onChange={(e) => setEmail(e.target.value)}
         />
-      </div>
-      <button className={styles.button} onClick={sendMagicLink}>
-        Send Magic Link
-      </button>
-      {message && (
-        <p style={{
-          marginTop: 12,
-          color: message.startsWith('Error') ? '#b91c1c' : '#2563eb'
-        }}>
-          {message}
-        </p>
-      )}
+        <button type="submit">Send Magic Link</button>
+      </form>
+      <p>{message}</p>
     </div>
   );
 }
