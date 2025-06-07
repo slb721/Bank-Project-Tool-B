@@ -11,21 +11,20 @@ export default function Login() {
   const sendMagicLink = async () => {
     setMessage('');
 
-    // Force callback back to /dashboard on this exact origin:
-    const redirectTo = `${window.location.origin}/dashboard`;
+    // Build the full URL we want Supabase to send you back to:
+    const dashboardUrl = `${window.location.origin}/dashboard`;
 
-    const { data, error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        redirectTo: `${window.location.origin}/dashboard`
-      },
-    });
+-    const { data, error } = await supabase.auth.signInWithOtp({
+-      email,
+-      options: { redirectTo: dashboardUrl },
+-    });
++    const { data, error } = await supabase.auth.signInWithOtp({
++      email,
++      options: { emailRedirectTo: dashboardUrl },  // <-- v2 requires emailRedirectTo
++    });
 
-    if (error) {
-      setMessage(`Error: ${error.message}`);
-    } else {
-      setMessage('✅ Magic link sent! Check your email.');
-    }
+    if (error) setMessage(`Error: ${error.message}`);
+    else setMessage('✅ Magic link sent! Check your email.');
   };
 
   return (
