@@ -1,207 +1,308 @@
 // components/Projections.js
-import { useState, useEffect } from 'react';
+
+import React, { useEffect, useState } from 'react';
+import styles from '../styles/Dashboard.module.css';
 import { supabase } from '../lib/supabaseClient';
+import { Chart } from 'react-chartjs-2';
 import {
-  startOfToday,
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarController,
+  LineController,
+  BarElement,
+  PointElement,
+  LineElement,
+  Filler,
+  Title,
+  Tooltip,
+  Legend,
+} from 'chart.js';
+import {
   addDays,
   addWeeks,
   addMonths,
-  isBefore,
   parseISO,
   format,
+  isBefore,
+  startOfDay,
+  startOfMonth,
+  differenceInDays,
 } from 'date-fns';
-import Chart from './Chart';
+
+ChartJS.register(
+  BarController,
+  LineController,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  PointElement,
+  LineElement,
+  Filler,
+  Title,
+  Tooltip,
+  Legend
+);
 
 export default function Projections({ refresh }) {
-  const [balance, setBalance] = useState(0);
-  const [paychecks, setPaychecks] = useState([]);
-  const [cards, setCards] = useState([]);
-  const [view, setView] = useState('monthly');
-  const [data, setData] = useState([]);
-  const [lowestPoint, setLowestPoint] = useState(null);
-  const [growthRate, setGrowthRate] = useState(null);
-  const [requiredStart, setRequiredStart] = useState(null);
-  const [requiredPaycheck, setRequiredPaycheck] = useState(null);
+  const [view, setView] = useState('daily');
+  const [chartData, setChartData] = useState(null);
+  const [stats, setStats] = useState({
+    lowPoint: { date: new Date(), balance: 0 },
+    negDay: null,
+    growth: '0.00',
+    requiredBalance: '0.00',
+    requiredPay: '0.00',
+  });
 
   useEffect(() => {
-    const load = async () => {
-      const { data: balData } = await supabase.from('balances').select().order('id', { ascending: false }).limit(1);
-      const { data: pData } = await supabase.from('paychecks').select();
-      const { data: cData } = await supabase.from('cards').select();
+    async function run() {
+      const user = (await supabase.auth.getUser()).data.user;
+      if (!user) return;
 
-      setBalance(balData?.[0]?.amount || 0);
-      setPaychecks(pData || []);
-      setCards(cData || []);
-    };
+      const { data: acct } = await supabase
+        .from('accounts')
+        .select('current_balance')
+        .eq('user_id', user.id)
+        .single();
+      if (!acct) return;
 
-    load();
-  }, [refresh]);
+      const { data: pcs } = await supabase
+        .from('paychecks')
+        .select('amount, schedule, next_date')
+        .eq('user_id', user.id);
 
-  useEffect(() => {
-    if (cards.length === 0) return;
+      const { data: ccs } = await supabase
+        .from('credit_cards')
+        .select('next_due_date, next_due_amount, avg_future_amount')
+        .eq('user_id', user.id);
 
-    const today = startOfToday();
-    const projectionDays = 180;
-    const projected = [];
-    let running = balance;
-    let minBalance = balance;
-    let lastDate = today;
+      const events = [];
+      const today = startOfDay(new Date());
+      const horizonEnd = addMonths(today, 6);
 
-    for (let i = 0; i <= projectionDays; i++) {
-      const date = addDays(today, i);
-
-      // Apply paychecks
-      paychecks.forEach((p) => {
-        const firstDate = parseISO(p.next_date);
-        const schedule = p.schedule;
-        let nextPay = firstDate;
-
-        while (isBefore(nextPay, date) || format(nextPay, 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd')) {
-          if (format(nextPay, 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd')) {
-            running += p.amount;
-            break;
-          }
-
-          if (schedule === 'biweekly') nextPay = addWeeks(nextPay, 2);
-          else if (schedule === 'weekly') nextPay = addWeeks(nextPay, 1);
-          else if (schedule === 'monthly') nextPay = addMonths(nextPay, 1);
-          else break;
+      pcs.forEach(({ amount, schedule, next_date }) => {
+        let dt = parseISO(next_date);
+        while (!isBefore(horizonEnd, dt)) {
+          events.push({ date: startOfDay(dt), amt: +amount });
+          if (schedule === 'weekly') dt = addWeeks(dt, 1);
+          else if (schedule === 'biweekly') dt = addWeeks(dt, 2);
+          else if (schedule === 'bimonthly') dt = addDays(dt, 15);
+          else dt = addMonths(dt, 1);
         }
       });
 
-      // Apply credit card charges
-      cards.forEach((card) => {
-        const nextDue = parseISO(card.next_due);
-        const avg = card.avg_amount;
-        let due = nextDue;
-
-        while (isBefore(due, date) || format(due, 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd')) {
-          if (format(due, 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd')) {
-            running -= avg;
-            break;
-          }
-          due = addMonths(due, 1);
+      ccs.forEach(({ next_due_date, next_due_amount, avg_future_amount }) => {
+        let dt = parseISO(next_due_date);
+        let first = true;
+        while (!isBefore(horizonEnd, dt)) {
+          events.push({
+            date: startOfDay(dt),
+            amt: -(first ? +next_due_amount : +avg_future_amount),
+          });
+          first = false;
+          dt = addMonths(dt, 1);
         }
       });
 
-      projected.push({ date, balance: running });
-      if (running < minBalance) {
-        minBalance = running;
-        lastDate = date;
+      events.sort((a, b) => a.date - b.date);
+
+      const daily = [];
+      let bal = +acct.current_balance;
+      let minBal = bal, minDate = today, negDay = null, sim = 0, minSim = 0;
+      const startBal = bal;
+
+      for (let d = today, idx = 0; !isBefore(horizonEnd, d); d = addDays(d, 1)) {
+        let flow = 0;
+        while (idx < events.length && events[idx].date.getTime() === d.getTime()) {
+          flow += events[idx++].amt;
+        }
+        bal += flow;
+        sim += flow;
+        if (bal < minBal) {
+          minBal = bal;
+          minDate = d;
+        }
+        if (!negDay && bal < 0) negDay = format(d, 'MM/dd/yyyy');
+        if (sim < minSim) minSim = sim;
+        daily.push({ date: d, bal, flow });
       }
-    }
 
-    setData(projected);
-    setLowestPoint({ date: lastDate, value: minBalance });
+      const labels = [], dataBal = [], dataFlow = [], high = [], low = [], avg = [];
 
-    const final = projected[projected.length - 1].balance;
-    const growth = ((final - balance) / Math.abs(balance || 1)) * 100;
-    setGrowthRate(growth.toFixed(2));
-
-    // Correct required starting balance
-    const lowest = projected.reduce((min, d) => (d.balance < min ? d.balance : min), balance);
-    setRequiredStart(lowest < 0 ? (balance - lowest).toFixed(2) : 0);
-
-    // Correct required paycheck
-    if (paychecks.length > 0 && cards.length > 0) {
-      const template = paychecks[0];
-      const intervalDays =
-        template.schedule === 'biweekly' ? 14 :
-        template.schedule === 'weekly' ? 7 :
-        template.schedule === 'monthly' ? 30 : null;
-
-      if (intervalDays) {
-        const trial = (amt) => {
-          let r = balance;
-          for (let i = 0; i <= projectionDays; i++) {
-            const date = addDays(today, i);
-            // Add paycheck
-            if ((i % intervalDays) === 0) r += amt;
-
-            // Subtract all card avg charges
-            cards.forEach((card) => {
-              const nextDue = parseISO(card.next_due);
-              let due = nextDue;
-              while (isBefore(due, date) || format(due, 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd')) {
-                if (format(due, 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd')) {
-                  r -= card.avg_amount;
-                  break;
-                }
-                due = addMonths(due, 1);
-              }
-            });
-
-            if (r < 0) return false;
-          }
-          return true;
-        };
-
-        // Binary search paycheck
-        let lo = 0, hi = 10000, res = null;
-        while (hi - lo > 1) {
-          const mid = (lo + hi) / 2;
-          if (trial(mid)) {
-            res = mid;
-            hi = mid;
-          } else {
-            lo = mid;
-          }
+      if (view === 'daily') {
+        daily.forEach((p) => {
+          labels.push(format(p.date, 'MM/dd'));
+          dataBal.push(p.bal);
+          dataFlow.push(p.flow);
+        });
+      } else if (view === 'weekly') {
+        let run = startBal;
+        for (let w = today; !isBefore(horizonEnd, w); w = addDays(w, 7)) {
+          const weekEnd = addDays(w, 6);
+          const wf = events
+            .filter((e) => e.date >= w && e.date <= weekEnd)
+            .reduce((s, e) => s + e.amt, 0);
+          run += wf;
+          labels.push(format(w, 'MM/dd'));
+          dataBal.push(run);
+          dataFlow.push(wf);
         }
-        setRequiredPaycheck(res ? res.toFixed(2) : 'N/A');
       } else {
-        setRequiredPaycheck('');
+        const flowByMonth = {};
+        events.forEach((e) => {
+          const key = format(startOfMonth(e.date), 'yyyy-MM');
+          flowByMonth[key] = (flowByMonth[key] || 0) + e.amt;
+        });
+
+        let runSum = startBal;
+        for (let m = startOfMonth(today); !isBefore(horizonEnd, m); m = addMonths(m, 1)) {
+          const key = format(m, 'yyyy-MM');
+          const mf = flowByMonth[key] || 0;
+          runSum += mf;
+
+          labels.push(format(m, 'MMM yy'));
+          dataFlow.push(mf);
+          dataBal.push(runSum);
+
+          const slice = daily.filter((p) => p.date >= m && p.date < addMonths(m, 1));
+          if (slice.length) {
+            const bals = slice.map((p) => p.bal);
+            high.push(Math.max(...bals));
+            low.push(Math.min(...bals));
+            avg.push(bals.reduce((a, b) => a + b, 0) / bals.length);
+          } else {
+            high.push(runSum);
+            low.push(runSum);
+            avg.push(runSum);
+          }
+        }
       }
-    } else {
-      setRequiredPaycheck('');
+
+      const datasets = [];
+      if (view === 'monthly') {
+        datasets.push(
+          { type: 'line', label: 'Avg', data: avg, borderColor: '#3b82f6', fill: false },
+          { type: 'line', label: 'High', data: high, borderColor: '#6366f1', fill: '+1' },
+          { type: 'line', label: 'Low', data: low, borderColor: '#ef4444', fill: false },
+          {
+            type: 'bar',
+            label: 'Flow',
+            data: dataFlow,
+            yAxisID: 'y1',
+            backgroundColor: dataFlow.map((f) => (f >= 0 ? '#10b981' : '#ef4444')),
+          },
+          {
+            type: 'line',
+            label: 'Balance',
+            data: dataBal,
+            yAxisID: 'y',
+            borderColor: '#3b82f6',
+            fill: false,
+          }
+        );
+      } else {
+        datasets.push(
+          {
+            type: 'line',
+            label: 'Balance',
+            data: dataBal,
+            yAxisID: 'y',
+            borderColor: '#3b82f6',
+            fill: false,
+            tension: 0.1,
+            pointRadius: view === 'daily' ? 0 : 3,
+          },
+          {
+            type: 'bar',
+            label: 'Flow',
+            data: dataFlow,
+            yAxisID: 'y1',
+            backgroundColor: dataFlow.map((f) => (f >= 0 ? '#10b981' : '#ef4444')),
+          }
+        );
+      }
+
+      setChartData({ labels, datasets });
+
+      const finalBal = dataBal[dataBal.length - 1];
+      const growth = (((finalBal / startBal - 1) * 2 * 100) || 0).toFixed(2);
+      const requiredBalance = Math.max(0, -minSim).toFixed(2);
+
+      const biweeklyPeriods = Math.floor(differenceInDays(horizonEnd, today) / 14);
+      const totalExpenses = events.reduce((s, e) => (e.amt < 0 ? s + -e.amt : s), 0);
+      const requiredPay = biweeklyPeriods > 0 ? (totalExpenses / biweeklyPeriods).toFixed(2) : '0.00';
+
+      setStats({
+        lowPoint: { date: minDate, balance: minBal },
+        negDay,
+        growth,
+        requiredBalance,
+        requiredPay,
+      });
     }
-  }, [balance, paychecks, cards]);
+
+    run();
+  }, [refresh, view]);
+
+  if (!chartData) return <div className={styles.card}>Loading…</div>;
 
   return (
-    <div className="card chartWide">
-      <div className="chartHeader">
-        <h3 className="chartTitle">6-Month Projection</h3>
-        <div className="btnGroup">
-          {['daily', 'weekly', 'monthly'].map((v) => (
-            <button
-              key={v}
-              className={`button ${view === v ? 'active' : ''}`}
-              onClick={() => setView(v)}
-            >
-              {v.charAt(0).toUpperCase() + v.slice(1)}
-            </button>
-          ))}
+    <>
+      <div className={styles.chartWide}>
+        <div className={styles.chartHeader}>
+          <h3 className={styles.chartTitle}>6-Month Projection</h3>
+          <div className={styles.btnGroup}>
+            {['daily', 'weekly', 'monthly'].map((v) => (
+              <button key={v} onClick={() => setView(v)} className={view === v ? styles.active : ''}>
+                {v[0].toUpperCase() + v.slice(1)}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div style={{ height: '320px' }}>
+          <Chart
+            data={chartData}
+            options={{
+              responsive: true,
+              maintainAspectRatio: false,
+              scales: {
+                x: { grid: { display: false }, ticks: { maxTicksLimit: 12 } },
+                y: { position: 'left', title: { display: true, text: 'Balance ($)' } },
+                y1: view === 'monthly'
+                  ? {}
+                  : { position: 'right', title: { display: true, text: 'Flow ($)' }, grid: { drawOnChartArea: false } },
+              },
+              plugins: {
+                legend: { position: 'top' },
+                tooltip: { mode: 'index', intersect: false },
+              },
+            }}
+          />
         </div>
       </div>
 
-      <Chart data={data} view={view} />
-
-      <div className="statsGrid">
-        <div className="statCard">
+      <div className={styles.statsGrid}>
+        <div className={styles.statCard}>
           <small>Lowest Point</small>
-          <div className="statValue">
-            {lowestPoint ? `${format(lowestPoint.date, 'MM/dd/yyyy')} @ $${lowestPoint.value.toFixed(2)}` : '—'}
-          </div>
+          <p className={styles.statValue}>
+            {format(stats.lowPoint.date, 'MM/dd/yyyy')} @ ${stats.lowPoint.balance.toFixed(2)}
+          </p>
+          {stats.negDay && <p className={styles.statWarn}>⚠️ Below zero on {stats.negDay}</p>}
         </div>
-
-        <div className="statCard">
+        <div className={styles.statCard}>
           <small>Annualized Growth</small>
-          <div className="statValue">{growthRate}%</div>
+          <p className={styles.statValue}>{stats.growth}%</p>
         </div>
-
-        <div className="statCard">
+        <div className={styles.statCard}>
           <small>Required Starting Balance</small>
-          <div className="statValue">
-            {requiredStart === null ? '—' : `$${requiredStart}`}
-          </div>
+          <p className={styles.statValue}>${stats.requiredBalance}</p>
         </div>
-
-        <div className="statCard">
-          <small>Required Paycheck ({paychecks?.[0]?.schedule || 'Biweekly'})</small>
-          <div className="statValue">
-            {requiredPaycheck ? `$${requiredPaycheck}` : '—'}
-          </div>
+        <div className={styles.statCard}>
+          <small>Required Paycheck (Biweekly)</small>
+          <p className={styles.statValue}>${stats.requiredPay}</p>
         </div>
       </div>
-    </div>
+    </>
   );
 }
