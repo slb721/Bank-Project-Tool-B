@@ -27,6 +27,7 @@ import {
   isBefore,
   startOfDay,
   startOfMonth,
+  differenceInDays,
 } from 'date-fns';
 
 ChartJS.register(
@@ -46,7 +47,13 @@ ChartJS.register(
 export default function Projections({ refresh }) {
   const [view, setView] = useState('daily');
   const [chartData, setChartData] = useState(null);
-  const [stats, setStats] = useState(null);
+  const [stats, setStats] = useState({
+    lowPoint: { date: new Date(), balance: 0 },
+    negDay: null,
+    growth: '0.00',
+    requiredBalance: '0.00',
+    requiredPay: '0.00',
+  });
 
   useEffect(() => {
     async function run() {
@@ -60,7 +67,7 @@ export default function Projections({ refresh }) {
         .single();
       if (!acct) return;
 
-      const { data: paychecks } = await supabase
+      const { data: pcs } = await supabase
         .from('paychecks')
         .select('amount, schedule, next_date')
         .eq('user_id', user.id);
@@ -70,10 +77,11 @@ export default function Projections({ refresh }) {
         .select('next_due_date, next_due_amount, avg_future_amount')
         .eq('user_id', user.id);
 
-      const horizonEnd = addMonths(startOfDay(new Date()), 6);
       const events = [];
+      const today = startOfDay(new Date());
+      const horizonEnd = addMonths(today, 6);
 
-      paychecks.forEach(({ amount, schedule, next_date }) => {
+      pcs.forEach(({ amount, schedule, next_date }) => {
         let dt = parseISO(next_date);
         while (!isBefore(horizonEnd, dt)) {
           events.push({ date: startOfDay(dt), amt: +amount });
@@ -100,24 +108,11 @@ export default function Projections({ refresh }) {
       events.sort((a, b) => a.date - b.date);
 
       const daily = [];
-      let bal = +acct.current_balance,
-        sim = 0,
-        minSim = 0;
-      let minBal = bal,
-        minDate = startOfDay(new Date()),
-        negDay = null;
-      let expSum = 0;
+      let bal = +acct.current_balance;
+      let minBal = bal, minDate = today, negDay = null, sim = 0, minSim = 0;
+      const startBal = bal;
 
-      events.forEach((e) => {
-        if (e.amt < 0) expSum += -e.amt;
-      });
-
-      let idx = 0;
-      for (
-        let d = startOfDay(new Date());
-        !isBefore(horizonEnd, d);
-        d = addDays(d, 1)
-      ) {
+      for (let d = today, idx = 0; !isBefore(horizonEnd, d); d = addDays(d, 1)) {
         let flow = 0;
         while (idx < events.length && events[idx].date.getTime() === d.getTime()) {
           flow += events[idx++].amt;
@@ -133,12 +128,7 @@ export default function Projections({ refresh }) {
         daily.push({ date: d, bal, flow });
       }
 
-      const labels = [],
-        dataBal = [],
-        dataFlow = [],
-        high = [],
-        low = [],
-        avg = [];
+      const labels = [], dataBal = [], dataFlow = [], high = [], low = [], avg = [];
 
       if (view === 'daily') {
         daily.forEach((p) => {
@@ -147,12 +137,8 @@ export default function Projections({ refresh }) {
           dataFlow.push(p.flow);
         });
       } else if (view === 'weekly') {
-        let run = +acct.current_balance;
-        for (
-          let w = startOfDay(new Date());
-          !isBefore(horizonEnd, w);
-          w = addDays(w, 7)
-        ) {
+        let run = startBal;
+        for (let w = today; !isBefore(horizonEnd, w); w = addDays(w, 7)) {
           const weekEnd = addDays(w, 6);
           const wf = events
             .filter((e) => e.date >= w && e.date <= weekEnd)
@@ -169,12 +155,8 @@ export default function Projections({ refresh }) {
           flowByMonth[key] = (flowByMonth[key] || 0) + e.amt;
         });
 
-        let runSum = +acct.current_balance;
-        for (
-          let m = startOfMonth(new Date());
-          !isBefore(horizonEnd, m);
-          m = addMonths(m, 1)
-        ) {
+        let runSum = startBal;
+        for (let m = startOfMonth(today); !isBefore(horizonEnd, m); m = addMonths(m, 1)) {
           const key = format(m, 'yyyy-MM');
           const mf = flowByMonth[key] || 0;
           runSum += mf;
@@ -197,89 +179,87 @@ export default function Projections({ refresh }) {
         }
       }
 
-      const datasets = view === 'monthly'
-        ? [
-            { type: 'line', label: 'Avg', data: avg, borderColor: '#3b82f6', fill: false },
-            { type: 'line', label: 'High', data: high, borderColor: '#6366f1', fill: '+1' },
-            { type: 'line', label: 'Low', data: low, borderColor: '#ef4444', fill: false },
-            {
-              type: 'bar',
-              label: 'Flow',
-              data: dataFlow,
-              yAxisID: 'y1',
-              backgroundColor: dataFlow.map((f) => (f >= 0 ? '#10b981' : '#ef4444')),
-            },
-            {
-              type: 'line',
-              label: 'Balance',
-              data: dataBal,
-              yAxisID: 'y',
-              borderColor: '#3b82f6',
-              fill: false,
-            },
-          ]
-        : [
-            {
-              type: 'line',
-              label: 'Balance',
-              data: dataBal,
-              yAxisID: 'y',
-              borderColor: '#3b82f6',
-              fill: false,
-              tension: 0.1,
-              pointRadius: view === 'daily' ? 0 : 3,
-            },
-            {
-              type: 'bar',
-              label: 'Flow',
-              data: dataFlow,
-              yAxisID: 'y1',
-              backgroundColor: dataFlow.map((f) => (f >= 0 ? '#10b981' : '#ef4444')),
-            },
-          ];
+      const datasets = [];
+      if (view === 'monthly') {
+        datasets.push(
+          { type: 'line', label: 'Avg', data: avg, borderColor: '#3b82f6', fill: false },
+          { type: 'line', label: 'High', data: high, borderColor: '#6366f1', fill: '+1' },
+          { type: 'line', label: 'Low', data: low, borderColor: '#ef4444', fill: false },
+          {
+            type: 'bar',
+            label: 'Flow',
+            data: dataFlow,
+            yAxisID: 'y1',
+            backgroundColor: dataFlow.map((f) => (f >= 0 ? '#10b981' : '#ef4444')),
+          },
+          {
+            type: 'line',
+            label: 'Balance',
+            data: dataBal,
+            yAxisID: 'y',
+            borderColor: '#3b82f6',
+            fill: false,
+          }
+        );
+      } else {
+        datasets.push(
+          {
+            type: 'line',
+            label: 'Balance',
+            data: dataBal,
+            yAxisID: 'y',
+            borderColor: '#3b82f6',
+            fill: false,
+            tension: 0.1,
+            pointRadius: view === 'daily' ? 0 : 3,
+          },
+          {
+            type: 'bar',
+            label: 'Flow',
+            data: dataFlow,
+            yAxisID: 'y1',
+            backgroundColor: dataFlow.map((f) => (f >= 0 ? '#10b981' : '#ef4444')),
+          }
+        );
+      }
 
       setChartData({ labels, datasets });
 
       const finalBal = dataBal[dataBal.length - 1];
-      const growth = (((finalBal / +acct.current_balance - 1) * 2 * 100) || 0).toFixed(2);
-      const reqBal = Math.max(0, -minSim).toFixed(2);
-      const biweeklyPayPeriods = Math.floor(26 / 2); // ~13 periods in 6 months
-      const reqPay = biweeklyPayPeriods > 0 ? (minSim / biweeklyPayPeriods).toFixed(2) : '0.00';
+      const growth = (((finalBal / startBal - 1) * 2 * 100) || 0).toFixed(2);
+      const requiredBalance = Math.max(0, -minSim).toFixed(2);
+
+      const biweeklyPeriods = Math.floor(differenceInDays(horizonEnd, today) / 14);
+      const totalExpenses = events.reduce((s, e) => (e.amt < 0 ? s + -e.amt : s), 0);
+      const requiredPay = biweeklyPeriods > 0 ? (totalExpenses / biweeklyPeriods).toFixed(2) : '0.00';
 
       setStats({
         lowPoint: { date: minDate, balance: minBal },
         negDay,
         growth,
-        requiredBalance: reqBal,
-        requiredPay: reqPay,
+        requiredBalance,
+        requiredPay,
       });
     }
 
     run();
   }, [refresh, view]);
 
-  if (!chartData || !stats) {
-    return <div className={styles.card}>Loading…</div>;
-  }
+  if (!chartData) return <div className={styles.card}>Loading…</div>;
 
   return (
     <>
-      <div className={`${styles.card} ${styles.chartWide}`}>
+      <div className={styles.chartWide}>
         <div className={styles.chartHeader}>
           <h3 className={styles.chartTitle}>6-Month Projection</h3>
           <div className={styles.btnGroup}>
             {['daily', 'weekly', 'monthly'].map((v) => (
-              <button
-                key={v}
-                onClick={() => setView(v)}
-                className={view === v ? styles.active : ''}
-              >
+              <button key={v} onClick={() => setView(v)} className={view === v ? styles.active : ''}>
                 {v[0].toUpperCase() + v.slice(1)}
               </button>
             ))}
           </div>
         </div>
-
         <div style={{ height: '320px' }}>
           <Chart
             data={chartData}
@@ -288,18 +268,10 @@ export default function Projections({ refresh }) {
               maintainAspectRatio: false,
               scales: {
                 x: { grid: { display: false }, ticks: { maxTicksLimit: 12 } },
-                y: {
-                  position: 'left',
-                  title: { display: true, text: 'Balance ($)' },
-                },
-                y1:
-                  view === 'monthly'
-                    ? {}
-                    : {
-                        position: 'right',
-                        title: { display: true, text: 'Flow ($)' },
-                        grid: { drawOnChartArea: false },
-                      },
+                y: { position: 'left', title: { display: true, text: 'Balance ($)' } },
+                y1: view === 'monthly'
+                  ? {}
+                  : { position: 'right', title: { display: true, text: 'Flow ($)' }, grid: { drawOnChartArea: false } },
               },
               plugins: {
                 legend: { position: 'top' },
@@ -327,7 +299,7 @@ export default function Projections({ refresh }) {
           <p className={styles.statValue}>${stats.requiredBalance}</p>
         </div>
         <div className={styles.statCard}>
-          <small>Required Paycheck</small>
+          <small>Required Paycheck (Biweekly)</small>
           <p className={styles.statValue}>${stats.requiredPay}</p>
         </div>
       </div>
