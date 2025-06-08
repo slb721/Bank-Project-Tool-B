@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+// components/CardForm.js
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import styles from '../styles/Dashboard.module.css';
-import { toast } from 'react-hot-toast';
 
 export default function CardForm({ onSave }) {
   const [name, setName] = useState('');
@@ -10,19 +10,17 @@ export default function CardForm({ onSave }) {
   const [avgAmt, setAvgAmt] = useState('');
   const [items, setItems] = useState([]);
   const [editingId, setEditingId] = useState(null);
+  const [message, setMessage] = useState('');
 
   useEffect(() => {
     fetchAll();
   }, []);
 
   const fetchAll = async () => {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
     const { data } = await supabase
       .from('credit_cards')
       .select('*')
-      .eq('user_id', user.id);
+      .order('next_due_date', { ascending: true });
     setItems(data || []);
   };
 
@@ -35,16 +33,13 @@ export default function CardForm({ onSave }) {
   };
 
   const handleSave = async () => {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
+    const { data: { user } } = await supabase.auth.getUser();
     const payload = {
       user_id: user.id,
-      name,
+      name: name.trim(),
       next_due_date: nextDue,
-      next_due_amount: nextAmt,
-      avg_future_amount: avgAmt,
+      next_due_amount: +nextAmt,
+      avg_future_amount: +avgAmt,
     };
     if (editingId) payload.id = editingId;
 
@@ -52,10 +47,9 @@ export default function CardForm({ onSave }) {
       .from('credit_cards')
       .upsert(payload, { onConflict: ['id'] });
 
-    if (error) {
-      toast.error(error.message);
-    } else {
-      toast.success('Card saved!');
+    if (!error) {
+      setMessage('Card saved successfully!');
+      setTimeout(() => setMessage(''), 3000);
       setName('');
       setNextDue('');
       setNextAmt('');
@@ -68,19 +62,62 @@ export default function CardForm({ onSave }) {
 
   const handleDelete = async (id) => {
     await supabase.from('credit_cards').delete().eq('id', id);
-    toast.success('Deleted');
+    setMessage('Card deleted.');
+    setTimeout(() => setMessage(''), 3000);
     fetchAll();
     onSave();
   };
 
   return (
     <div className={styles.card}>
-      <h2>Credit Cards</h2>
+      <h2 className={styles.heading}>Credit Cards</h2>
+      {message && <div className={styles.success}>{message}</div>}
+
+      <div className={styles.formGroup}>
+        <label>Card Name</label>
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+      </div>
+
+      <div className={styles.formGroup}>
+        <label>Next Due Date</label>
+        <input
+          type="date"
+          value={nextDue}
+          onChange={(e) => setNextDue(e.target.value)}
+        />
+      </div>
+
+      <div className={styles.formGroup}>
+        <label>Next Due Amount</label>
+        <input
+          type="number"
+          value={nextAmt}
+          onChange={(e) => setNextAmt(e.target.value)}
+        />
+      </div>
+
+      <div className={styles.formGroup}>
+        <label>Avg Future Amount</label>
+        <input
+          type="number"
+          value={avgAmt}
+          onChange={(e) => setAvgAmt(e.target.value)}
+        />
+      </div>
+
+      <button className={styles.button} onClick={handleSave}>
+        {editingId ? 'Update' : 'Add'} Card
+      </button>
+
       <ul className={styles.itemList}>
         {items.map((cc) => (
           <li key={cc.id} className={styles.listItem}>
             <div className={styles.itemInfo}>
-              {cc.name || 'Card'} — Due {cc.next_due_date} — ${parseFloat(cc.next_due_amount).toFixed(2)} — Avg ${parseFloat(cc.avg_future_amount).toFixed(2)}
+              <strong>{cc.name}</strong> — Due {cc.next_due_date}: ${parseFloat(cc.next_due_amount).toFixed(2)}; Avg ${parseFloat(cc.avg_future_amount).toFixed(2)}
             </div>
             <div className={styles.itemActions}>
               <button className={styles.buttonSm} onClick={() => startEdit(cc)}>Edit</button>
@@ -89,27 +126,6 @@ export default function CardForm({ onSave }) {
           </li>
         ))}
       </ul>
-
-      <div className={styles.formGroup}>
-        <label>Card Name</label>
-        <input type="text" value={name} onChange={(e) => setName(e.target.value)} />
-      </div>
-      <div className={styles.formGroup}>
-        <label>Next Due Date</label>
-        <input type="date" value={nextDue} onChange={(e) => setNextDue(e.target.value)} />
-      </div>
-      <div className={styles.formGroup}>
-        <label>Next Due Amount</label>
-        <input type="number" value={nextAmt} onChange={(e) => setNextAmt(e.target.value)} />
-      </div>
-      <div className={styles.formGroup}>
-        <label>Avg Future Amount</label>
-        <input type="number" value={avgAmt} onChange={(e) => setAvgAmt(e.target.value)} />
-      </div>
-
-      <button className={styles.button} onClick={handleSave}>
-        {editingId ? 'Update' : 'Add'} Card
-      </button>
     </div>
   );
 }

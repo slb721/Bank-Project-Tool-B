@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+// components/PaycheckForm.js
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import styles from '../styles/Dashboard.module.css';
-import { toast } from 'react-hot-toast';
 
 export default function PaycheckForm({ onSave }) {
   const [amount, setAmount] = useState('');
@@ -9,54 +9,45 @@ export default function PaycheckForm({ onSave }) {
   const [nextDate, setNextDate] = useState('');
   const [items, setItems] = useState([]);
   const [editingId, setEditingId] = useState(null);
+  const [message, setMessage] = useState('');
 
   useEffect(() => {
     fetchAll();
   }, []);
 
   const fetchAll = async () => {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('paychecks')
       .select('*')
-      .eq('user_id', user.id);
-    setItems(data || []);
+      .order('next_date', { ascending: true });
+    if (data) setItems(data);
   };
 
-  const startEdit = (pc) => {
-    setEditingId(pc.id);
-    setAmount(pc.amount);
-    setSchedule(pc.schedule);
-    setNextDate(pc.next_date);
+  const startEdit = (item) => {
+    setEditingId(item.id);
+    setAmount(item.amount);
+    setSchedule(item.schedule);
+    setNextDate(item.next_date);
   };
 
   const handleSave = async () => {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
+    const { data: { user } } = await supabase.auth.getUser();
     const payload = {
-      user_id: user.id,
-      amount,
+      amount: +amount,
       schedule,
       next_date: nextDate,
+      user_id: user.id,
     };
     if (editingId) payload.id = editingId;
 
-    const { error } = await supabase
-      .from('paychecks')
-      .upsert(payload, { onConflict: ['id'] });
-
-    if (error) {
-      toast.error(error.message);
-    } else {
+    const { error } = await supabase.from('paychecks').upsert(payload);
+    if (!error) {
+      setMessage('Paycheck saved successfully!');
+      setTimeout(() => setMessage(''), 3000);
       setAmount('');
       setSchedule('biweekly');
       setNextDate('');
       setEditingId(null);
-      toast.success('Paycheck saved!');
       fetchAll();
       onSave();
     }
@@ -64,28 +55,16 @@ export default function PaycheckForm({ onSave }) {
 
   const handleDelete = async (id) => {
     await supabase.from('paychecks').delete().eq('id', id);
-    toast.success('Deleted');
+    setMessage('Paycheck deleted.');
+    setTimeout(() => setMessage(''), 3000);
     fetchAll();
     onSave();
   };
 
   return (
     <div className={styles.card}>
-      <h2>Paychecks</h2>
-      <ul className={styles.itemList}>
-        {items.map((pc) => (
-          <li key={pc.id} className={styles.listItem}>
-            <div className={styles.itemInfo}>
-              ${parseFloat(pc.amount).toFixed(2)} — {pc.schedule} — Next: {pc.next_date}
-            </div>
-            <div className={styles.itemActions}>
-              <button className={styles.buttonSm} onClick={() => startEdit(pc)}>Edit</button>
-              <button className={`${styles.buttonSm} ${styles.buttonDanger}`} onClick={() => handleDelete(pc.id)}>Delete</button>
-            </div>
-          </li>
-        ))}
-      </ul>
-
+      <h2 className={styles.heading}>Paychecks</h2>
+      {message && <div className={styles.success}>{message}</div>}
       <div className={styles.formGroup}>
         <label>Amount</label>
         <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} />
@@ -103,10 +82,22 @@ export default function PaycheckForm({ onSave }) {
         <label>Next Date</label>
         <input type="date" value={nextDate} onChange={(e) => setNextDate(e.target.value)} />
       </div>
-
       <button className={styles.button} onClick={handleSave}>
         {editingId ? 'Update' : 'Add'} Paycheck
       </button>
+      <ul className={styles.itemList}>
+        {items.map((pc) => (
+          <li key={pc.id} className={styles.listItem}>
+            <div className={styles.itemInfo}>
+              ${parseFloat(pc.amount).toFixed(2)} — {pc.schedule} — Next: {pc.next_date}
+            </div>
+            <div className={styles.itemActions}>
+              <button className={styles.buttonSm} onClick={() => startEdit(pc)}>Edit</button>
+              <button className={`${styles.buttonSm} ${styles.buttonDanger}`} onClick={() => handleDelete(pc.id)}>Delete</button>
+            </div>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
