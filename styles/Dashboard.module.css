@@ -101,6 +101,7 @@
 }
 
 
-li button + button {
+.listItem :global(button + button) {
   margin-left: 0.5rem;
 }
+
