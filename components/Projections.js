@@ -29,6 +29,7 @@ import {
   startOfMonth,
 } from 'date-fns';
 
+// Register Chart.js components
 ChartJS.register(
   BarController,
   LineController,
@@ -46,7 +47,13 @@ ChartJS.register(
 export default function Projections({ refresh }) {
   const [view, setView] = useState('daily');
   const [chartData, setChartData] = useState(null);
-  const [stats, setStats] = useState(null);
+  const [stats, setStats] = useState({
+    lowPoint: { date: new Date(), balance: 0 },
+    negDay: null,
+    growth: '0.00',
+    requiredBalance: '0.00',
+    requiredPay: '0.00',
+  });
 
   useEffect(() => {
     async function run() {
@@ -56,22 +63,24 @@ export default function Projections({ refresh }) {
       } = await supabase.auth.getUser();
       if (userError || !user) return;
 
+      const userId = user.id;
+
       const { data: acct } = await supabase
         .from('accounts')
         .select('current_balance')
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .single();
       if (!acct) return;
 
       const { data: pcs } = await supabase
         .from('paychecks')
         .select('amount, schedule, next_date')
-        .eq('user_id', user.id);
+        .eq('user_id', userId);
 
       const { data: ccs } = await supabase
         .from('credit_cards')
         .select('next_due_date, next_due_amount, avg_future_amount')
-        .eq('user_id', user.id);
+        .eq('user_id', userId);
 
       const events = [];
       const horizonEnd = addMonths(startOfDay(new Date()), 6);
@@ -103,17 +112,26 @@ export default function Projections({ refresh }) {
       events.sort((a, b) => a.date - b.date);
 
       const daily = [];
-      let bal = +acct.current_balance;
-      let sim = 0, minSim = 0;
-      let minBal = bal, minDate = startOfDay(new Date());
-      let negDay = null, payCount = 0, expSum = 0;
+      let bal = +acct.current_balance,
+        sim = 0,
+        minSim = 0;
+      let minBal = bal,
+        minDate = startOfDay(new Date()),
+        negDay = null;
+      let payCount = 0,
+        expSum = 0;
+
       events.forEach((e) => {
         if (e.amt > 0) payCount++;
         else expSum += -e.amt;
       });
 
       let idx = 0;
-      for (let d = startOfDay(new Date()); !isBefore(horizonEnd, d); d = addDays(d, 1)) {
+      for (
+        let d = startOfDay(new Date());
+        !isBefore(horizonEnd, d);
+        d = addDays(d, 1)
+      ) {
         let flow = 0;
         while (idx < events.length && events[idx].date.getTime() === d.getTime()) {
           flow += events[idx++].amt;
@@ -129,7 +147,13 @@ export default function Projections({ refresh }) {
         daily.push({ date: d, bal, flow });
       }
 
-      const labels = [], dataBal = [], dataFlow = [], high = [], low = [], avg = [];
+      const labels = [],
+        dataBal = [],
+        dataFlow = [],
+        high = [],
+        low = [],
+        avg = [];
+
       if (view === 'daily') {
         daily.forEach((p) => {
           labels.push(format(p.date, 'MM/dd'));
@@ -138,9 +162,15 @@ export default function Projections({ refresh }) {
         });
       } else if (view === 'weekly') {
         let run = +acct.current_balance;
-        for (let w = startOfDay(new Date()); !isBefore(horizonEnd, w); w = addDays(w, 7)) {
+        for (
+          let w = startOfDay(new Date());
+          !isBefore(horizonEnd, w);
+          w = addDays(w, 7)
+        ) {
           const weekEnd = addDays(w, 6);
-          const wf = events.filter((e) => e.date >= w && e.date <= weekEnd).reduce((s, e) => s + e.amt, 0);
+          const wf = events
+            .filter((e) => e.date >= w && e.date <= weekEnd)
+            .reduce((s, e) => s + e.amt, 0);
           run += wf;
           labels.push(format(w, 'MM/dd'));
           dataBal.push(run);
@@ -152,14 +182,21 @@ export default function Projections({ refresh }) {
           const key = format(startOfMonth(e.date), 'yyyy-MM');
           flowByMonth[key] = (flowByMonth[key] || 0) + e.amt;
         });
+
         let runSum = +acct.current_balance;
-        for (let m = startOfMonth(new Date()); !isBefore(horizonEnd, m); m = addMonths(m, 1)) {
+        for (
+          let m = startOfMonth(new Date());
+          !isBefore(horizonEnd, m);
+          m = addMonths(m, 1)
+        ) {
           const key = format(m, 'yyyy-MM');
           const mf = flowByMonth[key] || 0;
           runSum += mf;
+
           labels.push(format(m, 'MMM yy'));
           dataFlow.push(mf);
           dataBal.push(runSum);
+
           const slice = daily.filter((p) => p.date >= m && p.date < addMonths(m, 1));
           if (slice.length) {
             const bals = slice.map((p) => p.bal);
@@ -180,105 +217,145 @@ export default function Projections({ refresh }) {
           { type: 'line', label: 'Avg', data: avg, borderColor: '#3b82f6', fill: false },
           { type: 'line', label: 'High', data: high, borderColor: '#6366f1', fill: '+1' },
           { type: 'line', label: 'Low', data: low, borderColor: '#ef4444', fill: false },
-          { type: 'bar', label: 'Flow', data: dataFlow, yAxisID: 'y1', backgroundColor: dataFlow.map(f => f >= 0 ? '#10b981' : '#ef4444') },
-          { type: 'line', label: 'Balance', data: dataBal, yAxisID: 'y', borderColor: '#3b82f6', fill: false }
+          {
+            type: 'bar',
+            label: 'Flow',
+            data: dataFlow,
+            yAxisID: 'y1',
+            backgroundColor: dataFlow.map((f) => (f >= 0 ? '#10b981' : '#ef4444')),
+          },
+          {
+            type: 'line',
+            label: 'Balance',
+            data: dataBal,
+            yAxisID: 'y',
+            borderColor: '#3b82f6',
+            fill: false,
+          }
         );
       } else {
         datasets.push(
-          { type: 'line', label: 'Balance', data: dataBal, yAxisID: 'y', borderColor: '#3b82f6', fill: false, tension: 0.1, pointRadius: view === 'daily' ? 0 : 3 },
-          { type: 'bar', label: 'Flow', data: dataFlow, yAxisID: 'y1', backgroundColor: dataFlow.map(f => f >= 0 ? '#10b981' : '#ef4444') }
+          {
+            type: 'line',
+            label: 'Balance',
+            data: dataBal,
+            yAxisID: 'y',
+            borderColor: '#3b82f6',
+            fill: false,
+            tension: 0.1,
+            pointRadius: view === 'daily' ? 0 : 3,
+          },
+          {
+            type: 'bar',
+            label: 'Flow',
+            data: dataFlow,
+            yAxisID: 'y1',
+            backgroundColor: dataFlow.map((f) => (f >= 0 ? '#10b981' : '#ef4444')),
+          }
         );
       }
 
       setChartData({ labels, datasets });
 
-      // 6) Compute stats
-const finalBal = dataBal[dataBal.length - 1];
-const growth = (((finalBal / +acct.current_balance - 1) * 2 * 100) || 0).toFixed(2);
-const reqBal = Math.max(0, -minSim).toFixed(2);
-const months = 6;
-const reqPay = (expSum / months).toFixed(2); // Fixed logic
+      const finalBal = dataBal[dataBal.length - 1];
+      const growth = (((finalBal / +acct.current_balance - 1) * 2 * 100) || 0).toFixed(2);
+      const reqBal = Math.max(0, -minSim).toFixed(2);
+      const reqPay = pcs.length > 0 ? (expSum / pcs.length).toFixed(2) : '0.00';
 
-setStats({
-  lowPoint: { date: minDate, balance: minBal },
-  negDay,
-  growth,
-  requiredBalance: reqBal,
-  requiredPay: reqPay,
-});
-
+      setStats({
+        lowPoint: { date: minDate, balance: minBal },
+        negDay,
+        growth,
+        requiredBalance: reqBal,
+        requiredPay: reqPay,
+      });
     }
 
     run();
   }, [refresh, view]);
 
-  if (!chartData || !stats) return <div className={styles.card}>Loading…</div>;
+  if (!chartData) {
+    return <div className={styles.card}>Loading…</div>;
+  }
 
   return (
-    <div className={styles.card}>
-      <div className={styles.chartHeader}>
-        <h3 className={styles.chartTitle}>6-Month Projection</h3>
-        <div className="flex gap-2">
-  {['daily', 'weekly', 'monthly'].map((v) => (
-    <button
-      key={v}
-      onClick={() => setView(v)}
-      className={`px-3 py-1.5 rounded-md text-sm font-medium transition
-        ${
-          view === v
-            ? 'bg-blue-600 text-white shadow'
-            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-        }`}
-    >
-      {v[0].toUpperCase() + v.slice(1)}
-    </button>
-  ))}
-</div>
+    <>
+      <div className={`${styles.card} ${styles.chartCard}`}>
+        <div className={styles.chartHeader}>
+          <h3 className={styles.chartTitle}>6-Month Projection</h3>
+          <div className="flex gap-2">
+            {['daily', 'weekly', 'monthly'].map((v) => (
+              <button
+                key={v}
+                onClick={() => setView(v)}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition ${
+                  view === v
+                    ? 'bg-blue-600 text-white shadow'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                {v[0].toUpperCase() + v.slice(1)}
+              </button>
+            ))}
+          </div>
+        </div>
 
-      </div>
-
-      <div style={{ height: '320px' }}>
-        <Chart
-          data={chartData}
-          options={{
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-              x: { grid: { display: false }, ticks: { maxTicksLimit: 12 } },
-              y: { position: 'left', title: { display: true, text: 'Balance ($)' } },
-              y1: view === 'monthly' ? {} : {
-                position: 'right',
-                title: { display: true, text: 'Flow ($)' },
-                grid: { drawOnChartArea: false },
+        <div style={{ height: '320px' }}>
+          <Chart
+            data={chartData}
+            options={{
+              responsive: true,
+              maintainAspectRatio: false,
+              scales: {
+                x: { grid: { display: false }, ticks: { maxTicksLimit: 12 } },
+                y: {
+                  position: 'left',
+                  title: { display: true, text: 'Balance ($)' },
+                },
+                y1:
+                  view === 'monthly'
+                    ? {}
+                    : {
+                        position: 'right',
+                        title: { display: true, text: 'Flow ($)' },
+                        grid: { drawOnChartArea: false },
+                      },
               },
-            },
-            plugins: {
-              legend: { position: 'top' },
-              tooltip: { mode: 'index', intersect: false },
-            },
-          }}
-        />
+              plugins: {
+                legend: { position: 'top' },
+                tooltip: { mode: 'index', intersect: false },
+              },
+            }}
+          />
+        </div>
       </div>
 
-      <div className={styles.statsGrid}>
-        <div className={styles.statCard}>
-          <small>Lowest Point</small>
-          <p className={styles.statValue}>
-            {format(stats.lowPoint.date, 'MM/dd/yyyy')} @ ${stats.lowPoint.balance.toFixed(2)}
-          </p>
-          {stats.negDay && <p className={styles.statWarn}>⚠️ Below zero on {stats.negDay}</p>}
-        </div>
-        <div className={styles.statCard}>
-          <small>Annualized Growth</small>
-          <p className={styles.statValue}>{stats.growth}%</p>
-        </div>
-        <div className={styles.statCard}>
-          <small>Required Starting Balance</small>
-          <p className={styles.statValue}>${stats.requiredBalance}</p>
-          <small>Required Paycheck</small>
-          <p className={styles.statValue}>${stats.requiredPay}</p>
+      <div className={styles.card}>
+        <div className={styles.statsGrid}>
+          <div className={styles.statCard}>
+            <small>Lowest Point</small>
+            <p className={styles.statValue}>
+              {format(stats.lowPoint.date, 'MM/dd/yyyy')} @ ${stats.lowPoint.balance.toFixed(2)}
+            </p>
+            {stats.negDay && <p className={styles.statWarn}>⚠️ Below zero on {stats.negDay}</p>}
+          </div>
+          <div className={styles.statCard}>
+            <small>Annualized Growth</small>
+            <p className={styles.statValue}>{stats.growth}%</p>
+          </div>
+          <div className={styles.statCard}>
+            <small>
+              Required Starting Balance{' '}
+              <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>
+                (to remain positive)
+              </span>
+            </small>
+            <p className={styles.statValue}>${stats.requiredBalance}</p>
+            <small>Required Paycheck</small>
+            <p className={styles.statValue}>${stats.requiredPay}</p>
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }

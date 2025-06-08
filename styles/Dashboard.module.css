@@ -44,12 +44,12 @@
   background: #dc2626;
 }
 
-/* Grid Layout for Dashboard Sections */
 .dashboardGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
-  gap: 2rem;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 1rem;
 }
+
 
 /* Card Wrapper */
 .card {
@@ -229,4 +229,15 @@
   background: #fff;
   border-radius: 12px;
   box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+}
+
+.chartCard {
+  grid-column: span 2;
+}
+
+.chartHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
 }
