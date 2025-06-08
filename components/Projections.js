@@ -1,186 +1,207 @@
 // components/Projections.js
-
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import Chart from 'chart.js/auto';
-import { Line } from 'react-chartjs-2';
-import styles from '../styles/Dashboard.module.css';
-
-const getNextDates = (start, freq, count = 12) => {
-  const dates = [];
-  const ms = {
-    weekly: 7,
-    biweekly: 14,
-    monthly: 30,
-  }[freq.toLowerCase()];
-  for (let i = 0; i < count; i++) {
-    const next = new Date(start);
-    next.setDate(next.getDate() + i * ms);
-    dates.push(next);
-  }
-  return dates;
-};
-
-const getTotalOutflows = (cards, days) => {
-  return cards.reduce((sum, c) => sum + parseFloat(c.average_amount || 0) * (days / 30), 0);
-};
+import {
+  startOfToday,
+  addDays,
+  addWeeks,
+  addMonths,
+  isBefore,
+  parseISO,
+  format,
+} from 'date-fns';
+import Chart from './Chart';
 
 export default function Projections({ refresh }) {
   const [balance, setBalance] = useState(0);
   const [paychecks, setPaychecks] = useState([]);
   const [cards, setCards] = useState([]);
-  const [interval, setInterval] = useState('daily');
-  const [chartData, setChartData] = useState(null);
-  const [lowest, setLowest] = useState(null);
-  const [growth, setGrowth] = useState(null);
+  const [view, setView] = useState('monthly');
+  const [data, setData] = useState([]);
+  const [lowestPoint, setLowestPoint] = useState(null);
+  const [growthRate, setGrowthRate] = useState(null);
   const [requiredStart, setRequiredStart] = useState(null);
   const [requiredPaycheck, setRequiredPaycheck] = useState(null);
 
-  const today = new Date();
-  const days = 180;
-
   useEffect(() => {
-    const fetchAll = async () => {
-      const { data: balanceData } = await supabase.from('balances').select('*').single();
-      setBalance(parseFloat(balanceData?.amount || 0));
+    const load = async () => {
+      const { data: balData } = await supabase.from('balances').select().order('id', { ascending: false }).limit(1);
+      const { data: pData } = await supabase.from('paychecks').select();
+      const { data: cData } = await supabase.from('cards').select();
 
-      const { data: paycheckData } = await supabase.from('paychecks').select('*');
-      setPaychecks(paycheckData || []);
-
-      const { data: cardData } = await supabase.from('credit_cards').select('*');
-      setCards(cardData || []);
+      setBalance(balData?.[0]?.amount || 0);
+      setPaychecks(pData || []);
+      setCards(cData || []);
     };
-    fetchAll();
+
+    load();
   }, [refresh]);
 
   useEffect(() => {
-    if (!balance && cards.length === 0) return;
+    if (cards.length === 0) return;
 
-    const dates = Array.from({ length: days }, (_, i) => {
-      const d = new Date();
-      d.setDate(today.getDate() + i);
-      return d;
-    });
+    const today = startOfToday();
+    const projectionDays = 180;
+    const projected = [];
+    let running = balance;
+    let minBalance = balance;
+    let lastDate = today;
 
-    const paycheckEvents = [];
-    paychecks.forEach((p) => {
-      const start = new Date(p.next_date);
-      const frequency = p.schedule.toLowerCase();
-      const amount = parseFloat(p.amount || 0);
-      const schedule = getNextDates(start, frequency, 30);
-      schedule.forEach((d) => {
-        if (d >= today && d <= dates[dates.length - 1]) {
-          paycheckEvents.push({ date: d.toDateString(), amount });
+    for (let i = 0; i <= projectionDays; i++) {
+      const date = addDays(today, i);
+
+      // Apply paychecks
+      paychecks.forEach((p) => {
+        const firstDate = parseISO(p.next_date);
+        const schedule = p.schedule;
+        let nextPay = firstDate;
+
+        while (isBefore(nextPay, date) || format(nextPay, 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd')) {
+          if (format(nextPay, 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd')) {
+            running += p.amount;
+            break;
+          }
+
+          if (schedule === 'biweekly') nextPay = addWeeks(nextPay, 2);
+          else if (schedule === 'weekly') nextPay = addWeeks(nextPay, 1);
+          else if (schedule === 'monthly') nextPay = addMonths(nextPay, 1);
+          else break;
         }
       });
-    });
 
-    const cardEvents = [];
-    cards.forEach((c) => {
-      const start = new Date(c.next_due_date);
-      const avgAmount = parseFloat(c.average_amount || 0);
-      const schedule = getNextDates(start, 'monthly', 6);
-      schedule.forEach((d) => {
-        cardEvents.push({ date: d.toDateString(), amount: -avgAmount });
+      // Apply credit card charges
+      cards.forEach((card) => {
+        const nextDue = parseISO(card.next_due);
+        const avg = card.avg_amount;
+        let due = nextDue;
+
+        while (isBefore(due, date) || format(due, 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd')) {
+          if (format(due, 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd')) {
+            running -= avg;
+            break;
+          }
+          due = addMonths(due, 1);
+        }
       });
-    });
 
-    const map = new Map();
-    paycheckEvents.forEach(({ date, amount }) => {
-      map.set(date, (map.get(date) || 0) + amount);
-    });
-    cardEvents.forEach(({ date, amount }) => {
-      map.set(date, (map.get(date) || 0) + amount);
-    });
-
-    const values = [];
-    let running = balance;
-    let min = balance;
-    dates.forEach((d) => {
-      const key = d.toDateString();
-      running += map.get(key) || 0;
-      values.push(running);
-      if (running < min) min = running;
-    });
-
-    const initial = balance;
-    const final = values[values.length - 1];
-    const annualized = ((final - initial) / initial) * (365 / days) * 100;
-
-    setChartData({
-      labels: dates.map((d) => d.toLocaleDateString()),
-      datasets: [
-        {
-          label: 'Balance',
-          data: values,
-          borderColor: '#3b82f6',
-          backgroundColor: 'rgba(59, 130, 246, 0.1)',
-          tension: 0.3,
-        },
-      ],
-    });
-
-    setLowest(min);
-    setGrowth(annualized.toFixed(2));
-
-    // Required Starting Balance
-    const offset = balance - min;
-    setRequiredStart(offset < 0 ? Math.abs(offset).toFixed(2) : '0.00');
-
-    // Required Paycheck
-    if (cards.length > 0 && paychecks.length > 0) {
-      const nextDate = new Date(paychecks[0].next_date);
-      const frequency = paychecks[0].schedule.toLowerCase();
-      const payPeriods = Math.floor(days / (frequency === 'biweekly' ? 14 : 30));
-      const outflowTotal = getTotalOutflows(cards, days);
-      const requiredPerCheck = (outflowTotal / payPeriods).toFixed(2);
-      setRequiredPaycheck(requiredPerCheck);
-    } else {
-      setRequiredPaycheck(null);
+      projected.push({ date, balance: running });
+      if (running < minBalance) {
+        minBalance = running;
+        lastDate = date;
+      }
     }
-  }, [balance, paychecks, cards, interval]);
+
+    setData(projected);
+    setLowestPoint({ date: lastDate, value: minBalance });
+
+    const final = projected[projected.length - 1].balance;
+    const growth = ((final - balance) / Math.abs(balance || 1)) * 100;
+    setGrowthRate(growth.toFixed(2));
+
+    // Correct required starting balance
+    const lowest = projected.reduce((min, d) => (d.balance < min ? d.balance : min), balance);
+    setRequiredStart(lowest < 0 ? (balance - lowest).toFixed(2) : 0);
+
+    // Correct required paycheck
+    if (paychecks.length > 0 && cards.length > 0) {
+      const template = paychecks[0];
+      const intervalDays =
+        template.schedule === 'biweekly' ? 14 :
+        template.schedule === 'weekly' ? 7 :
+        template.schedule === 'monthly' ? 30 : null;
+
+      if (intervalDays) {
+        const trial = (amt) => {
+          let r = balance;
+          for (let i = 0; i <= projectionDays; i++) {
+            const date = addDays(today, i);
+            // Add paycheck
+            if ((i % intervalDays) === 0) r += amt;
+
+            // Subtract all card avg charges
+            cards.forEach((card) => {
+              const nextDue = parseISO(card.next_due);
+              let due = nextDue;
+              while (isBefore(due, date) || format(due, 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd')) {
+                if (format(due, 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd')) {
+                  r -= card.avg_amount;
+                  break;
+                }
+                due = addMonths(due, 1);
+              }
+            });
+
+            if (r < 0) return false;
+          }
+          return true;
+        };
+
+        // Binary search paycheck
+        let lo = 0, hi = 10000, res = null;
+        while (hi - lo > 1) {
+          const mid = (lo + hi) / 2;
+          if (trial(mid)) {
+            res = mid;
+            hi = mid;
+          } else {
+            lo = mid;
+          }
+        }
+        setRequiredPaycheck(res ? res.toFixed(2) : 'N/A');
+      } else {
+        setRequiredPaycheck('');
+      }
+    } else {
+      setRequiredPaycheck('');
+    }
+  }, [balance, paychecks, cards]);
 
   return (
-    <>
-      <div className={`${styles.card} ${styles.chartWide}`}>
-        <div className={styles.chartHeader}>
-          <h3 className={styles.chartTitle}>6-Month Projection</h3>
-          <div className={styles.btnGroup}>
-            {['daily', 'weekly', 'monthly'].map((opt) => (
-              <button
-                key={opt}
-                className={`${styles.button} ${interval === opt ? styles.active : ''}`}
-                onClick={() => setInterval(opt)}
-              >
-                {opt.charAt(0).toUpperCase() + opt.slice(1)}
-              </button>
-            ))}
-          </div>
+    <div className="card chartWide">
+      <div className="chartHeader">
+        <h3 className="chartTitle">6-Month Projection</h3>
+        <div className="btnGroup">
+          {['daily', 'weekly', 'monthly'].map((v) => (
+            <button
+              key={v}
+              className={`button ${view === v ? 'active' : ''}`}
+              onClick={() => setView(v)}
+            >
+              {v.charAt(0).toUpperCase() + v.slice(1)}
+            </button>
+          ))}
         </div>
-        {chartData && <Line data={chartData} />}
       </div>
 
-      <div className={styles.statsGrid}>
-        <div className={styles.statCard}>
+      <Chart data={data} view={view} />
+
+      <div className="statsGrid">
+        <div className="statCard">
           <small>Lowest Point</small>
-          <div className={styles.statValue}>${lowest?.toFixed(2)}</div>
-        </div>
-        <div className={styles.statCard}>
-          <small>Annualized Growth</small>
-          <div className={styles.statValue}>{growth}%</div>
-        </div>
-        <div className={styles.statCard}>
-          <small>Required Starting Balance</small>
-          <div className={styles.statValue}>${requiredStart}</div>
-        </div>
-        <div className={styles.statCard}>
-          <small>Required Paycheck (Biweekly)</small>
-          <div className={styles.statValue}>
-            {requiredPaycheck ? `$${requiredPaycheck}` : '--'}
+          <div className="statValue">
+            {lowestPoint ? `${format(lowestPoint.date, 'MM/dd/yyyy')} @ $${lowestPoint.value.toFixed(2)}` : '—'}
           </div>
-          <div className={styles.subtext}>Only calculated if paychecks and cards are both defined</div>
+        </div>
+
+        <div className="statCard">
+          <small>Annualized Growth</small>
+          <div className="statValue">{growthRate}%</div>
+        </div>
+
+        <div className="statCard">
+          <small>Required Starting Balance</small>
+          <div className="statValue">
+            {requiredStart === null ? '—' : `$${requiredStart}`}
+          </div>
+        </div>
+
+        <div className="statCard">
+          <small>Required Paycheck ({paychecks?.[0]?.schedule || 'Biweekly'})</small>
+          <div className="statValue">
+            {requiredPaycheck ? `$${requiredPaycheck}` : '—'}
+          </div>
         </div>
       </div>
-    </>
+    </div>
   );
 }
