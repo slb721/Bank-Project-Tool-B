@@ -19,7 +19,6 @@ export default function Dashboard() {
     const checkAuth = async () => {
       try {
         const { data: { user }, error } = await supabase.auth.getUser();
-        
         if (error) {
           console.error('Auth error:', error);
           router.push('/login');
@@ -42,7 +41,6 @@ export default function Dashboard() {
 
     checkAuth();
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_OUT' || !session) {
         router.push('/login');
@@ -61,10 +59,7 @@ export default function Dashboard() {
   const handleSignOut = async () => {
     try {
       const { error } = await supabase.auth.signOut();
-      if (error) {
-        console.error('Sign out error:', error);
-      }
-      // The auth state change listener will handle the redirect
+      if (error) console.error('Sign out error:', error);
     } catch (err) {
       console.error('Unexpected sign out error:', err);
     }
@@ -79,7 +74,7 @@ export default function Dashboard() {
   }
 
   if (!user) {
-    return null; // Will redirect to login
+    return null;
   }
 
   return (
@@ -93,7 +88,7 @@ export default function Dashboard() {
           </button>
         </div>
       </div>
-      
+
       <div className={styles.dashboardGrid}>
         <BalanceForm onSave={bump} />
         <PaycheckForm onSave={bump} />
