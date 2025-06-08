@@ -192,18 +192,21 @@ export default function Projections({ refresh }) {
 
       setChartData({ labels, datasets });
 
-      const finalBal = dataBal[dataBal.length - 1];
-      const growth = (((finalBal / +acct.current_balance - 1) * 2 * 100) || 0).toFixed(2);
-      const reqBal = Math.max(0, -minSim).toFixed(2);
-      const reqPay = payCount > 0 ? (expSum / payCount).toFixed(2) : '0.00';
+      // 6) Compute stats
+const finalBal = dataBal[dataBal.length - 1];
+const growth = (((finalBal / +acct.current_balance - 1) * 2 * 100) || 0).toFixed(2);
+const reqBal = Math.max(0, -minSim).toFixed(2);
+const months = 6;
+const reqPay = (expSum / months).toFixed(2); // Fixed logic
 
-      setStats({
-        lowPoint: { date: minDate, balance: minBal },
-        negDay,
-        growth,
-        requiredBalance: reqBal,
-        requiredPay: reqPay,
-      });
+setStats({
+  lowPoint: { date: minDate, balance: minBal },
+  negDay,
+  growth,
+  requiredBalance: reqBal,
+  requiredPay: reqPay,
+});
+
     }
 
     run();
@@ -215,13 +218,23 @@ export default function Projections({ refresh }) {
     <div className={styles.card}>
       <div className={styles.chartHeader}>
         <h3 className={styles.chartTitle}>6-Month Projection</h3>
-        <div className={styles.btnGroup}>
-          {['daily', 'weekly', 'monthly'].map((v) => (
-            <button key={v} onClick={() => setView(v)} className={view === v ? styles.active : ''}>
-              {v[0].toUpperCase() + v.slice(1)}
-            </button>
-          ))}
-        </div>
+        <div className="flex gap-2">
+  {['daily', 'weekly', 'monthly'].map((v) => (
+    <button
+      key={v}
+      onClick={() => setView(v)}
+      className={`px-3 py-1.5 rounded-md text-sm font-medium transition
+        ${
+          view === v
+            ? 'bg-blue-600 text-white shadow'
+            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+        }`}
+    >
+      {v[0].toUpperCase() + v.slice(1)}
+    </button>
+  ))}
+</div>
+
       </div>
 
       <div style={{ height: '320px' }}>
