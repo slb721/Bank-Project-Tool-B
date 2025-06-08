@@ -117,8 +117,12 @@ export default function CardForm({ onSave }) {
         {items.map((cc) => (
           <li key={cc.id} className={styles.listItem}>
             <div className={styles.itemInfo}>
-              <strong>{cc.name}</strong> — Due {cc.next_due_date}: ${parseFloat(cc.next_due_amount).toFixed(2)}; Avg ${parseFloat(cc.avg_future_amount).toFixed(2)}
-            </div>
+  <div><strong>Card:</strong> {cc.name}</div>
+  <div><strong>Due:</strong> {cc.next_due_date}</div>
+  <div><strong>Next Amount:</strong> ${parseFloat(cc.next_due_amount).toFixed(2)}</div>
+  <div><strong>Avg:</strong> ${parseFloat(cc.avg_future_amount).toFixed(2)}</div>
+</div>
+
             <div className={styles.itemActions}>
               <button className={styles.buttonSm} onClick={() => startEdit(cc)}>Edit</button>
               <button className={`${styles.buttonSm} ${styles.buttonDanger}`} onClick={() => handleDelete(cc.id)}>Delete</button>
