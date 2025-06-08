@@ -1,107 +1,47 @@
-.card {
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  padding: 2rem;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
-  margin-bottom: 2rem;
-}
-
-.heading {
-  font-size: 1.5rem;
+.card h2 {
+  font-size: 1.25rem;
   font-weight: 600;
-  margin-bottom: 1.5rem;
-  color: #111827;
-}
-
-.formControl {
-  display: flex;
-  flex-direction: column;
   margin-bottom: 1rem;
+  color: #1f2937;
+  border-bottom: 1px solid #e5e7eb;
+  padding-bottom: 0.5rem;
 }
 
-.formControl label {
-  margin-bottom: 0.5rem;
-  font-weight: 500;
-  color: #374151;
-}
-
-.formControl input,
-.formControl select {
-  padding: 0.6rem 0.75rem;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  font-size: 1rem;
-  transition: border-color 0.2s;
-}
-
-.formControl input:focus,
-.formControl select:focus {
-  outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-.button {
-  padding: 0.6rem 1.25rem;
-  font-size: 1rem;
-  border: none;
-  background-color: #3b82f6;
-  color: white;
-  border-radius: 8px;
-  cursor: pointer;
-  margin-top: 1rem;
-  transition: background-color 0.2s;
-}
-
-.button:hover {
-  background-color: #2563eb;
-}
-
-.buttonSm {
-  padding: 0.35rem 0.75rem;
+.formGroup label {
+  font-weight: 600;
+  color: #1e293b;
   font-size: 0.875rem;
-  border-radius: 6px;
-  border: none;
-  cursor: pointer;
-  background-color: #f3f4f6;
-  color: #374151;
-  transition: background-color 0.2s;
 }
 
-.buttonSm:hover {
-  background-color: #e5e7eb;
+.success {
+  padding: 0.75rem;
+  background: #ecfdf5;
+  border: 1px solid #34d399;
+  border-radius: 0.5rem;
+  color: #065f46;
+  font-size: 0.875rem;
+  margin-bottom: 1rem;
+  animation: fadeOut 3s forwards;
 }
 
-.alert {
-  margin-top: 1rem;
-  padding: 0.75rem 1rem;
-  border-radius: 8px;
-  background-color: #fef2f2;
-  color: #991b1b;
-  font-size: 0.95rem;
-  border: 1px solid #fca5a5;
-}
-
-.list {
-  list-style: none;
-  padding: 0;
+@keyframes fadeOut {
+  0% { opacity: 1; }
+  80% { opacity: 1; }
+  100% { opacity: 0; display: none; }
 }
 
 .listItem {
-  background: #f9fafb;
-  padding: 0.75rem 1rem;
-  border-radius: 8px;
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  margin-bottom: 0.75rem;
-  font-size: 0.95rem;
+  align-items: center;
+  background: #f9fafb;
   border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  margin-bottom: 0.75rem;
 }
 
-
-.listItem :global(button + button) {
-  margin-left: 0.5rem;
+.listItem .itemInfo {
+  font-size: 0.95rem;
+  color: #374151;
 }
-
