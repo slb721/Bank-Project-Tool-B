@@ -52,7 +52,7 @@ export default function Projections({ refresh }) {
     negDay: null,
     growth: '0.00',
     requiredBalance: '0.00',
-    requiredPay: '0.00',
+    requiredPay: null, // Changed to null initially
   });
 
   useEffect(() => {
@@ -77,10 +77,15 @@ export default function Projections({ refresh }) {
         .select('next_due_date, next_due_amount, avg_future_amount')
         .eq('user_id', user.id);
 
+      // Check if we have at least one paycheck and one credit card
+      const hasPaycheck = pcs && pcs.length > 0;
+      const hasCreditCard = ccs && ccs.length > 0;
+
       const events = [];
       const today = startOfDay(new Date());
       const horizonEnd = addMonths(today, 6);
 
+      // Generate paycheck events (for chart visualization)
       pcs.forEach(({ amount, schedule, next_date }) => {
         let dt = parseISO(next_date);
         while (!isBefore(horizonEnd, dt)) {
@@ -92,14 +97,18 @@ export default function Projections({ refresh }) {
         }
       });
 
+      // Generate credit card events
+      let totalCreditCardExpenses = 0;
       ccs.forEach(({ next_due_date, next_due_amount, avg_future_amount }) => {
         let dt = parseISO(next_due_date);
         let first = true;
         while (!isBefore(horizonEnd, dt)) {
+          const amount = first ? +next_due_amount : +avg_future_amount;
           events.push({
             date: startOfDay(dt),
-            amt: -(first ? +next_due_amount : +avg_future_amount),
+            amt: -amount,
           });
+          totalCreditCardExpenses += amount;
           first = false;
           dt = addMonths(dt, 1);
         }
@@ -229,9 +238,31 @@ export default function Projections({ refresh }) {
       const growth = (((finalBal / startBal - 1) * 2 * 100) || 0).toFixed(2);
       const requiredBalance = Math.max(0, -minSim).toFixed(2);
 
-      const biweeklyPeriods = Math.floor(differenceInDays(horizonEnd, today) / 14);
-      const totalExpenses = events.reduce((s, e) => (e.amt < 0 ? s + -e.amt : s), 0);
-      const requiredPay = biweeklyPeriods > 0 ? (totalExpenses / biweeklyPeriods).toFixed(2) : '0.00';
+      // Calculate required paycheck amount
+      let requiredPay = null;
+      if (hasPaycheck && hasCreditCard) {
+        const firstPaycheck = pcs[0];
+        const paycheckSchedule = firstPaycheck.schedule;
+        
+        // Calculate number of paychecks in 6 months based on schedule
+        let paycheckCount = 0;
+        if (paycheckSchedule === 'weekly') {
+          paycheckCount = Math.floor(differenceInDays(horizonEnd, today) / 7);
+        } else if (paycheckSchedule === 'biweekly') {
+          paycheckCount = Math.floor(differenceInDays(horizonEnd, today) / 14);
+        } else if (paycheckSchedule === 'bimonthly') {
+          paycheckCount = Math.floor(differenceInDays(horizonEnd, today) / 15);
+        } else { // monthly
+          paycheckCount = 6;
+        }
+
+        if (paycheckCount > 0) {
+          // Required paycheck = (Total expenses + buffer to avoid hitting 0) / number of paychecks
+          // We need enough to cover expenses and maintain current balance
+          const totalNeeded = totalCreditCardExpenses;
+          requiredPay = (totalNeeded / paycheckCount).toFixed(2);
+        }
+      }
 
       setStats({
         lowPoint: { date: minDate, balance: minBal },
@@ -299,8 +330,12 @@ export default function Projections({ refresh }) {
           <p className={styles.statValue}>${stats.requiredBalance}</p>
         </div>
         <div className={styles.statCard}>
-          <small>Required Paycheck (Biweekly)</small>
-          <p className={styles.statValue}>${stats.requiredPay}</p>
+          <small>Required Paycheck</small>
+          {stats.requiredPay !== null ? (
+            <p className={styles.statValue}>${stats.requiredPay}</p>
+          ) : (
+            <p className={styles.statPlaceholder}>Add paycheck & credit card</p>
+          )}
         </div>
       </div>
     </>
