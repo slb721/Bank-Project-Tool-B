@@ -46,9 +46,10 @@
 
 .dashboardGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
 }
+
 
 
 /* Card Wrapper */
@@ -240,4 +241,46 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: 1rem;
+}
+
+.chartHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.chartTitle {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.chartWide {
+  grid-column: span 2;
+}
+
+.btnGroup {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.btnGroup .button {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.85rem;
+  background-color: #f3f4f6;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btnGroup .button:hover {
+  background-color: #e5e7eb;
+}
+
+.btnGroup .active {
+  background-color: #2563eb;
+  color: white;
+  border-color: #1d4ed8;
 }

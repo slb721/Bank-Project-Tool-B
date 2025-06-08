@@ -93,7 +93,7 @@ export default function Dashboard() {
         <BalanceForm onSave={bump} />
         <PaycheckForm onSave={bump} />
         <CardForm onSave={bump} />
-        <Projections refresh={refresh} />
+        <Projections refresh={refresh} className={styles.chartWide} />
       </div>
     </div>
   );

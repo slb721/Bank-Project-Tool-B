@@ -27,9 +27,9 @@ import {
   isBefore,
   startOfDay,
   startOfMonth,
+  differenceInCalendarDays,
 } from 'date-fns';
 
-// Register Chart.js components
 ChartJS.register(
   BarController,
   LineController,
@@ -57,44 +57,35 @@ export default function Projections({ refresh }) {
 
   useEffect(() => {
     async function run() {
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
-      if (userError || !user) return;
-
-      const userId = user.id;
-
       const { data: acct } = await supabase
         .from('accounts')
         .select('current_balance')
-        .eq('user_id', userId)
         .single();
       if (!acct) return;
 
       const { data: pcs } = await supabase
         .from('paychecks')
-        .select('amount, schedule, next_date')
-        .eq('user_id', userId);
+        .select('amount, schedule, next_date');
 
       const { data: ccs } = await supabase
         .from('credit_cards')
-        .select('next_due_date, next_due_amount, avg_future_amount')
-        .eq('user_id', userId);
+        .select('next_due_date, next_due_amount, avg_future_amount');
 
       const events = [];
       const horizonEnd = addMonths(startOfDay(new Date()), 6);
 
-      pcs.forEach(({ amount, schedule, next_date }) => {
-        let dt = parseISO(next_date);
-        while (!isBefore(horizonEnd, dt)) {
-          events.push({ date: startOfDay(dt), amt: +amount });
-          if (schedule === 'weekly') dt = addWeeks(dt, 1);
-          else if (schedule === 'biweekly') dt = addWeeks(dt, 2);
-          else if (schedule === 'bimonthly') dt = addDays(dt, 15);
-          else dt = addMonths(dt, 1);
-        }
-      });
+      if (pcs && pcs.length) {
+        pcs.forEach(({ amount, schedule, next_date }) => {
+          let dt = parseISO(next_date);
+          while (!isBefore(horizonEnd, dt)) {
+            events.push({ date: startOfDay(dt), amt: +amount });
+            if (schedule === 'weekly') dt = addWeeks(dt, 1);
+            else if (schedule === 'biweekly') dt = addWeeks(dt, 2);
+            else if (schedule === 'bimonthly') dt = addDays(dt, 15);
+            else dt = addMonths(dt, 1);
+          }
+        });
+      }
 
       ccs.forEach(({ next_due_date, next_due_amount, avg_future_amount }) => {
         let dt = parseISO(next_due_date);
@@ -118,13 +109,6 @@ export default function Projections({ refresh }) {
       let minBal = bal,
         minDate = startOfDay(new Date()),
         negDay = null;
-      let payCount = 0,
-        expSum = 0;
-
-      events.forEach((e) => {
-        if (e.amt > 0) payCount++;
-        else expSum += -e.amt;
-      });
 
       let idx = 0;
       for (
@@ -257,17 +241,52 @@ export default function Projections({ refresh }) {
 
       setChartData({ labels, datasets });
 
+      // Required paycheck simulation if none exist
+      let requiredPay = '0.00';
+      if (!pcs || pcs.length === 0) {
+        const biweeklyDates = [];
+        let d = startOfDay(new Date());
+        while (!isBefore(d, horizonEnd)) {
+          biweeklyDates.push(d);
+          d = addWeeks(d, 2);
+        }
+
+        let low = 0;
+        for (let amt = 0; amt <= 10000; amt += 5) {
+          let bal = +acct.current_balance;
+          idx = 0;
+          for (
+            let d = startOfDay(new Date());
+            !isBefore(horizonEnd, d);
+            d = addDays(d, 1)
+          ) {
+            let flow = 0;
+            if (biweeklyDates.some((bd) => bd.getTime() === d.getTime())) {
+              flow += amt;
+            }
+            while (idx < events.length && events[idx].date.getTime() === d.getTime()) {
+              flow += events[idx++].amt;
+            }
+            bal += flow;
+            if (bal < 0) break;
+          }
+          if (bal >= 0) {
+            requiredPay = amt.toFixed(2);
+            break;
+          }
+        }
+      }
+
       const finalBal = dataBal[dataBal.length - 1];
       const growth = (((finalBal / +acct.current_balance - 1) * 2 * 100) || 0).toFixed(2);
       const reqBal = Math.max(0, -minSim).toFixed(2);
-      const reqPay = pcs.length > 0 ? (expSum / pcs.length).toFixed(2) : '0.00';
 
       setStats({
         lowPoint: { date: minDate, balance: minBal },
         negDay,
         growth,
         requiredBalance: reqBal,
-        requiredPay: reqPay,
+        requiredPay,
       });
     }
 
@@ -279,83 +298,75 @@ export default function Projections({ refresh }) {
   }
 
   return (
-    <>
-      <div className={`${styles.card} ${styles.chartCard}`}>
-        <div className={styles.chartHeader}>
-          <h3 className={styles.chartTitle}>6-Month Projection</h3>
-          <div className="flex gap-2">
-            {['daily', 'weekly', 'monthly'].map((v) => (
-              <button
-                key={v}
-                onClick={() => setView(v)}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition ${
-                  view === v
-                    ? 'bg-blue-600 text-white shadow'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                {v[0].toUpperCase() + v.slice(1)}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div style={{ height: '320px' }}>
-          <Chart
-            data={chartData}
-            options={{
-              responsive: true,
-              maintainAspectRatio: false,
-              scales: {
-                x: { grid: { display: false }, ticks: { maxTicksLimit: 12 } },
-                y: {
-                  position: 'left',
-                  title: { display: true, text: 'Balance ($)' },
-                },
-                y1:
-                  view === 'monthly'
-                    ? {}
-                    : {
-                        position: 'right',
-                        title: { display: true, text: 'Flow ($)' },
-                        grid: { drawOnChartArea: false },
-                      },
-              },
-              plugins: {
-                legend: { position: 'top' },
-                tooltip: { mode: 'index', intersect: false },
-              },
-            }}
-          />
+    <div className={styles.card}>
+      <div className={styles.chartHeader}>
+        <h3 className={styles.chartTitle}>6-Month Projection</h3>
+        <div className={styles.btnGroup}>
+          {['daily', 'weekly', 'monthly'].map((v) => (
+            <button
+              key={v}
+              onClick={() => setView(v)}
+              className={`${styles.button} ${view === v ? styles.active : ''}`}
+            >
+              {v[0].toUpperCase() + v.slice(1)}
+            </button>
+          ))}
         </div>
       </div>
 
-      <div className={styles.card}>
-        <div className={styles.statsGrid}>
-          <div className={styles.statCard}>
-            <small>Lowest Point</small>
-            <p className={styles.statValue}>
-              {format(stats.lowPoint.date, 'MM/dd/yyyy')} @ ${stats.lowPoint.balance.toFixed(2)}
-            </p>
-            {stats.negDay && <p className={styles.statWarn}>⚠️ Below zero on {stats.negDay}</p>}
-          </div>
-          <div className={styles.statCard}>
-            <small>Annualized Growth</small>
-            <p className={styles.statValue}>{stats.growth}%</p>
-          </div>
-          <div className={styles.statCard}>
-            <small>
-              Required Starting Balance{' '}
-              <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>
-                (to remain positive)
-              </span>
-            </small>
-            <p className={styles.statValue}>${stats.requiredBalance}</p>
-            <small>Required Paycheck</small>
-            <p className={styles.statValue}>${stats.requiredPay}</p>
-          </div>
+      <div style={{ height: '320px' }}>
+        <Chart
+          data={chartData}
+          options={{
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              x: { grid: { display: false }, ticks: { maxTicksLimit: 12 } },
+              y: {
+                position: 'left',
+                title: { display: true, text: 'Balance ($)' },
+              },
+              y1:
+                view === 'monthly'
+                  ? {}
+                  : {
+                      position: 'right',
+                      title: { display: true, text: 'Flow ($)' },
+                      grid: { drawOnChartArea: false },
+                    },
+            },
+            plugins: {
+              legend: { position: 'top' },
+              tooltip: { mode: 'index', intersect: false },
+            },
+          }}
+        />
+      </div>
+
+      <div className={styles.statsGrid}>
+        <div className={styles.statCard}>
+          <small>Lowest Point</small>
+          <p className={styles.statValue}>
+            {format(stats.lowPoint.date, 'MM/dd/yyyy')} @ ${stats.lowPoint.balance.toFixed(2)}
+          </p>
+          {stats.negDay && <p className={styles.statWarn}>⚠️ Below zero on {stats.negDay}</p>}
+        </div>
+        <div className={styles.statCard}>
+          <small>Annualized Growth</small>
+          <p className={styles.statValue}>{stats.growth}%</p>
+        </div>
+        <div className={styles.statCard}>
+          <small>
+            Required Starting Balance{' '}
+            <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>
+              (to remain positive)
+            </span>
+          </small>
+          <p className={styles.statValue}>${stats.requiredBalance}</p>
+          <small>Required Paycheck</small>
+          <p className={styles.statValue}>${stats.requiredPay}</p>
         </div>
       </div>
-    </>
+    </div>
   );
 }
