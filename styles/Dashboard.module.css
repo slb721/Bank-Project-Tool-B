@@ -1,246 +1,53 @@
-/* styles/Dashboard.module.css */
-
-/* Layout Container */
-.container {
-  max-width: 1200px;
-  margin: 2rem auto;
-  padding: 1rem;
-  font-family: 'Inter', sans-serif;
-}
-
-/* Header */
-.header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-bottom: 1px solid #e5e7eb;
-  padding-bottom: 1rem;
-  margin-bottom: 2rem;
-}
-
-.header h2 {
-  font-size: 2rem;
-  font-weight: 700;
-  color: #111827;
-}
-
-.userInfo {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.signOutButton {
-  background: #ef4444;
-  color: white;
-  padding: 0.5rem 1rem;
-  border-radius: 6px;
-  border: none;
-  cursor: pointer;
-  font-weight: 500;
-}
-
-.signOutButton:hover {
-  background: #dc2626;
-}
-
-.dashboardGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 1.5rem;
-}
-
-
-
-/* Card Wrapper */
 .card {
-  background: #ffffff;
-  border-radius: 1rem;
-  padding: 2rem;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
-  border: 1px solid #e5e7eb;
-}
-
-/* Headings */
-.heading {
-  font-size: 1.5rem;
-  font-weight: 600;
-  margin-bottom: 1rem;
-  color: #1f2937;
-}
-
-/* Form Grid */
-.formGrid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1rem;
+  background-color: #ffffff;
+  border-radius: 8px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
   margin-bottom: 1.5rem;
 }
 
-.formGroup {
+.cardRow {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
 }
 
-.formGroup label {
-  font-weight: 500;
-  font-size: 0.875rem;
-  color: #374151;
-  margin-bottom: 0.25rem;
-}
-
-.formGroup input,
-.formGroup select {
-  padding: 0.75rem;
-  border: 1px solid #d1d5db;
-  border-radius: 0.5rem;
-  font-size: 1rem;
-  background-color: white;
-}
-
-.button {
-  background: #3b82f6;
-  color: white;
-  border: none;
-  padding: 0.75rem 1.5rem;
-  border-radius: 0.5rem;
-  cursor: pointer;
-  font-weight: 600;
-  margin-top: 0.5rem;
-}
-
-.button:hover {
-  background: #2563eb;
-}
-
-.buttonSm {
-  padding: 0.5rem 1rem;
-  font-size: 0.875rem;
-  background: #f3f4f6;
-  border: 1px solid #d1d5db;
-  border-radius: 0.375rem;
-  cursor: pointer;
-}
-
-.buttonSm:hover {
-  background: #e5e7eb;
-}
-
-.buttonDanger {
-  background: #ef4444;
-  color: white;
-  border: none;
-}
-
-.buttonDanger:hover {
-  background: #dc2626;
-}
-
-/* List Items */
-.itemList {
-  list-style: none;
-  padding: 0;
-  margin: 1rem 0 0;
-}
-
-.listItem {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
-  padding: 1rem;
-  border-radius: 0.5rem;
-  margin-bottom: 0.75rem;
-}
-
-.itemInfo {
-  font-size: 0.95rem;
-  color: #1f2937;
-}
-
-.itemActions {
-  display: flex;
-  gap: 0.5rem;
-}
-
-/* Notifications */
-.success {
-  background: #ecfdf5;
-  border: 1px solid #10b981;
-  color: #065f46;
-  padding: 0.75rem;
-  border-radius: 0.5rem;
-  margin-bottom: 1rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-}
-
-/* Loading */
-.loading {
-  font-size: 1.125rem;
-  color: #6b7280;
-  text-align: center;
-  padding: 2rem 0;
+.chartWide {
+  flex: 2;
+  min-width: 600px;
+  background-color: #ffffff;
+  border-radius: 8px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
 .statsGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 1rem;
-  margin-top: 1.5rem;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 1.5rem;
+  min-width: 250px;
 }
 
 .statCard {
-  background: #f8fafc;
-  border-radius: 0.5rem;
-  padding: 1rem;
-  text-align: center;
-  border: 1px solid #e2e8f0;
-}
-
-.statCard small {
-  display: block;
-  font-size: 0.75rem;
-  color: #64748b;
-  margin-bottom: 0.25rem;
-}
-
-.subtext {
-  font-size: 0.75rem;
-  color: #94a3b8;
-  margin-top: -0.5rem;
+  background-color: #ffffff;
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 .statValue {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: #1e293b;
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-top: 0.25rem;
 }
 
 .statWarn {
-  color: #dc2626;
-  font-weight: 600;
-  margin-top: 0.5rem;
-}
-
-.chartContainer {
-  margin-top: 40px;
-  padding: 20px;
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-}
-
-.chartCard {
-  grid-column: span 2;
-}
-
-.chartHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1rem;
+  color: #ef4444;
+  font-weight: 500;
+  font-size: 0.9rem;
+  margin-top: 0.25rem;
 }
 
 .chartHeader {
@@ -251,13 +58,8 @@
 }
 
 .chartTitle {
-  font-size: 1.25rem;
+  font-size: 1.125rem;
   font-weight: 600;
-  margin: 0;
-}
-
-.chartWide {
-  grid-column: span 2;
 }
 
 .btnGroup {
@@ -265,22 +67,23 @@
   gap: 0.5rem;
 }
 
-.btnGroup .button {
-  padding: 0.35rem 0.75rem;
-  font-size: 0.85rem;
-  background-color: #f3f4f6;
+.btnGroup button {
+  padding: 0.4rem 0.75rem;
   border: 1px solid #d1d5db;
-  border-radius: 4px;
+  border-radius: 6px;
+  background-color: #f3f4f6;
+  color: #374151;
+  font-size: 0.875rem;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
-.btnGroup .button:hover {
+.btnGroup button:hover {
   background-color: #e5e7eb;
 }
 
-.btnGroup .active {
-  background-color: #2563eb;
-  color: white;
-  border-color: #1d4ed8;
+.btnGroup button.active {
+  background-color: #3b82f6;
+  color: #ffffff;
+  border-color: #3b82f6;
 }
