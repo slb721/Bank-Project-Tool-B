@@ -1,71 +1,105 @@
-import { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import styles from '../styles/Dashboard.module.css';
 
-export default function Paychecks({ refresh, triggerRefresh }) {
-  const [paychecks, setPaychecks] = useState([]);
-  const [form, setForm] = useState({ amount: '', schedule: '', next_date: '' });
+export default function PaycheckForm({ onSave }) {
+  const [amount, setAmount] = useState('');
+  const [schedule, setSchedule] = useState('biweekly');
+  const [nextDate, setNextDate] = useState('');
+  const [items, setItems] = useState([]);
+  const [alert, setAlert] = useState('');
+  const [editingId, setEditingId] = useState(null);
 
-  useEffect(() => {
-    async function fetchPaychecks() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      const { data } = await supabase
-        .from('paychecks')
-        .select('*')
-        .eq('user_id', user.id);
-      setPaychecks(data || []);
-    }
+  useEffect(() => { fetchAll(); }, []);
 
-    fetchPaychecks();
-  }, [refresh]);
-
-  async function addPaycheck() {
+  const fetchAll = async () => {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    await supabase.from('paychecks').insert([{ ...form, user_id: user.id }]);
-    setForm({ amount: '', schedule: '', next_date: '' });
-    triggerRefresh();
-  }
+    const { data } = await supabase
+      .from('paychecks')
+      .select('*')
+      .eq('user_id', user.id);
+    setItems(data || []);
+  };
 
-  async function deletePaycheck(id) {
+  const startEdit = (pc) => {
+    setEditingId(pc.id);
+    setAmount(pc.amount);
+    setSchedule(pc.schedule);
+    setNextDate(pc.next_date);
+    setAlert('');
+  };
+
+  const handleSave = async () => {
+    setAlert('');
+    const { data: { user } } = await supabase.auth.getUser();
+
+    const payload = {
+      user_id: user.id,
+      amount,
+      schedule,
+      next_date: nextDate,
+    };
+    if (editingId) payload.id = editingId;
+
+    const { error } = await supabase
+      .from('paychecks')
+      .upsert(payload, { onConflict: ['id'] });
+
+    if (error) {
+      setAlert(error.message);
+    } else {
+      setAmount('');
+      setSchedule('biweekly');
+      setNextDate('');
+      setEditingId(null);
+      fetchAll();
+      onSave();
+    }
+  };
+
+  const handleDelete = async (id) => {
     await supabase.from('paychecks').delete().eq('id', id);
-    triggerRefresh();
-  }
+    fetchAll(); onSave();
+  };
 
   return (
     <div className={styles.card}>
-      <h3>Paychecks</h3>
-      <ul>
-        {paychecks.map((p) => (
-          <li key={p.id}>
-            ${p.amount} — {p.schedule} — Next: {p.next_date}{' '}
-            <button onClick={() => deletePaycheck(p.id)}>🗑</button>
+      <h2 className={styles.heading}>Paychecks</h2>
+
+      <div className={styles.formControl}>
+        <label>Amount</label>
+        <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} />
+      </div>
+
+      <div className={styles.formControl}>
+        <label>Schedule</label>
+        <select value={schedule} onChange={(e) => setSchedule(e.target.value)}>
+          <option value="weekly">Weekly</option>
+          <option value="biweekly">Biweekly</option>
+          <option value="bimonthly">Bimonthly</option>
+          <option value="monthly">Monthly</option>
+        </select>
+      </div>
+
+      <div className={styles.formControl}>
+        <label>Next Pay Date</label>
+        <input type="date" value={nextDate} onChange={(e) => setNextDate(e.target.value)} />
+      </div>
+
+      <button className={styles.button} onClick={handleSave}>
+        {editingId ? 'Update Paycheck' : 'Save Paycheck'}
+      </button>
+      {alert && <div className={styles.alert}>{alert}</div>}
+
+      <ul style={{ marginTop: '1rem' }}>
+        {items.map((pc) => (
+          <li key={pc.id} style={{ marginBottom: '0.75rem' }}>
+            ${parseFloat(pc.amount).toFixed(2)} – {pc.schedule} next {pc.next_date}
+            <button className={styles.buttonSm} style={{ marginLeft: '0.5rem' }} onClick={() => startEdit(pc)}>Edit</button>
+            <button className={styles.buttonSm} style={{ marginLeft: '0.25rem', background: '#ef4444', color: 'white' }} onClick={() => handleDelete(pc.id)}>Delete</button>
           </li>
         ))}
       </ul>
-      <input
-        type="number"
-        placeholder="Amount"
-        value={form.amount}
-        onChange={(e) => setForm({ ...form, amount: e.target.value })}
-      />
-      <select
-        value={form.schedule}
-        onChange={(e) => setForm({ ...form, schedule: e.target.value })}
-      >
-        <option value="">Schedule</option>
-        <option value="weekly">Weekly</option>
-        <option value="biweekly">Biweekly</option>
-        <option value="bimonthly">Bimonthly</option>
-        <option value="monthly">Monthly</option>
-      </select>
-      <input
-        type="date"
-        value={form.next_date}
-        onChange={(e) => setForm({ ...form, next_date: e.target.value })}
-      />
-      <button onClick={addPaycheck}>Add</button>
     </div>
   );
 }
