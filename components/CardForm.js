@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabaseClient';
+import { supabase, TEST_USER_ID } from '../lib/supabaseClient';
 import styles from '../styles/Dashboard.module.css';
 
 export default function CardForm({ onSave }) {
@@ -11,14 +11,15 @@ export default function CardForm({ onSave }) {
   const [alert, setAlert] = useState('');
   const [editingId, setEditingId] = useState(null);
 
-  useEffect(() => { fetchAll(); }, []);
+  useEffect(() => {
+    fetchAll();
+  }, []);
 
   const fetchAll = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
     const { data } = await supabase
       .from('credit_cards')
       .select('*')
-      .eq('user_id', user.id);
+      .eq('user_id', TEST_USER_ID);
     setItems(data || []);
   };
 
@@ -33,12 +34,13 @@ export default function CardForm({ onSave }) {
 
   const handleSave = async () => {
     setAlert('');
-    if (!name.trim()) return setAlert('Please enter a card name.');
-
-    const { data: { user } } = await supabase.auth.getUser();
+    if (!name.trim()) {
+      setAlert('Please enter a card name.');
+      return;
+    }
 
     const payload = {
-      user_id: user.id,
+      user_id: TEST_USER_ID,
       name: name.trim(),
       next_due_date: nextDue,
       next_due_amount: nextAmt,
@@ -52,14 +54,20 @@ export default function CardForm({ onSave }) {
 
     if (error) setAlert(error.message);
     else {
-      setName(''); setNextDue(''); setNextAmt(''); setAvgAmt(''); setEditingId(null);
-      fetchAll(); onSave();
+      setName('');
+      setNextDue('');
+      setNextAmt('');
+      setAvgAmt('');
+      setEditingId(null);
+      fetchAll();
+      onSave();
     }
   };
 
   const handleDelete = async (id) => {
     await supabase.from('credit_cards').delete().eq('id', id);
-    fetchAll(); onSave();
+    fetchAll();
+    onSave();
   };
 
   return (
@@ -68,22 +76,39 @@ export default function CardForm({ onSave }) {
 
       <div className={styles.formControl}>
         <label>Card Name</label>
-        <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Visa ending 1234" />
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="e.g. Visa ending 1234"
+        />
       </div>
 
       <div className={styles.formControl}>
         <label>Next Due Date</label>
-        <input type="date" value={nextDue} onChange={(e) => setNextDue(e.target.value)} />
+        <input
+          type="date"
+          value={nextDue}
+          onChange={(e) => setNextDue(e.target.value)}
+        />
       </div>
 
       <div className={styles.formControl}>
         <label>Next Due Amount</label>
-        <input type="number" value={nextAmt} onChange={(e) => setNextAmt(e.target.value)} />
+        <input
+          type="number"
+          value={nextAmt}
+          onChange={(e) => setNextAmt(e.target.value)}
+        />
       </div>
 
       <div className={styles.formControl}>
         <label>Avg Future Amount</label>
-        <input type="number" value={avgAmt} onChange={(e) => setAvgAmt(e.target.value)} />
+        <input
+          type="number"
+          value={avgAmt}
+          onChange={(e) => setAvgAmt(e.target.value)}
+        />
       </div>
 
       <button className={styles.button} onClick={handleSave}>
@@ -91,14 +116,27 @@ export default function CardForm({ onSave }) {
       </button>
       {alert && <div className={styles.alert}>{alert}</div>}
 
-      <ul style={{ marginTop: '1rem' }}>
+      <ul className={styles.list} style={{ marginTop: '1rem' }}>
         {items.map((cc) => (
-          <li key={cc.id} style={{ marginBottom: '0.75rem' }}>
+          <li className={styles.listItem} key={cc.id}>
             <strong>{cc.name}</strong> — Next {cc.next_due_date}: $
             {parseFloat(cc.next_due_amount).toFixed(2)}; Avg $
             {parseFloat(cc.avg_future_amount).toFixed(2)}
-            <button className={styles.buttonSm} style={{ marginLeft: '0.5rem' }} onClick={() => startEdit(cc)}>Edit</button>
-            <button className={styles.buttonSm} style={{ marginLeft: '0.25rem', background: '#ef4444', color: 'white' }} onClick={() => handleDelete(cc.id)}>Delete</button>
+            <div>
+              <button
+                className={styles.buttonSm}
+                onClick={() => startEdit(cc)}
+              >
+                Edit
+              </button>
+              <button
+                className={styles.buttonSm}
+                style={{ background: '#ef4444', color: 'white', marginLeft: '0.25rem' }}
+                onClick={() => handleDelete(cc.id)}
+              >
+                Delete
+              </button>
+            </div>
           </li>
         ))}
       </ul>

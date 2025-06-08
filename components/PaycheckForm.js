@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabaseClient';
+import { supabase, TEST_USER_ID } from '../lib/supabaseClient';
 import styles from '../styles/Dashboard.module.css';
 
 export default function PaycheckForm({ onSave }) {
@@ -10,14 +10,15 @@ export default function PaycheckForm({ onSave }) {
   const [alert, setAlert] = useState('');
   const [editingId, setEditingId] = useState(null);
 
-  useEffect(() => { fetchAll(); }, []);
+  useEffect(() => {
+    fetchAll();
+  }, []);
 
   const fetchAll = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
     const { data } = await supabase
       .from('paychecks')
       .select('*')
-      .eq('user_id', user.id);
+      .eq('user_id', TEST_USER_ID);
     setItems(data || []);
   };
 
@@ -31,10 +32,8 @@ export default function PaycheckForm({ onSave }) {
 
   const handleSave = async () => {
     setAlert('');
-    const { data: { user } } = await supabase.auth.getUser();
-
     const payload = {
-      user_id: user.id,
+      user_id: TEST_USER_ID,
       amount,
       schedule,
       next_date: nextDate,
@@ -59,7 +58,8 @@ export default function PaycheckForm({ onSave }) {
 
   const handleDelete = async (id) => {
     await supabase.from('paychecks').delete().eq('id', id);
-    fetchAll(); onSave();
+    fetchAll();
+    onSave();
   };
 
   return (
@@ -68,12 +68,19 @@ export default function PaycheckForm({ onSave }) {
 
       <div className={styles.formControl}>
         <label>Amount</label>
-        <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} />
+        <input
+          type="number"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+        />
       </div>
 
       <div className={styles.formControl}>
         <label>Schedule</label>
-        <select value={schedule} onChange={(e) => setSchedule(e.target.value)}>
+        <select
+          value={schedule}
+          onChange={(e) => setSchedule(e.target.value)}
+        >
           <option value="weekly">Weekly</option>
           <option value="biweekly">Biweekly</option>
           <option value="bimonthly">Bimonthly</option>
@@ -83,7 +90,11 @@ export default function PaycheckForm({ onSave }) {
 
       <div className={styles.formControl}>
         <label>Next Pay Date</label>
-        <input type="date" value={nextDate} onChange={(e) => setNextDate(e.target.value)} />
+        <input
+          type="date"
+          value={nextDate}
+          onChange={(e) => setNextDate(e.target.value)}
+        />
       </div>
 
       <button className={styles.button} onClick={handleSave}>
@@ -91,12 +102,25 @@ export default function PaycheckForm({ onSave }) {
       </button>
       {alert && <div className={styles.alert}>{alert}</div>}
 
-      <ul style={{ marginTop: '1rem' }}>
+      <ul className={styles.list} style={{ marginTop: '1rem' }}>
         {items.map((pc) => (
-          <li key={pc.id} style={{ marginBottom: '0.75rem' }}>
+          <li className={styles.listItem} key={pc.id}>
             ${parseFloat(pc.amount).toFixed(2)} – {pc.schedule} next {pc.next_date}
-            <button className={styles.buttonSm} style={{ marginLeft: '0.5rem' }} onClick={() => startEdit(pc)}>Edit</button>
-            <button className={styles.buttonSm} style={{ marginLeft: '0.25rem', background: '#ef4444', color: 'white' }} onClick={() => handleDelete(pc.id)}>Delete</button>
+            <div>
+              <button
+                className={styles.buttonSm}
+                onClick={() => startEdit(pc)}
+              >
+                Edit
+              </button>
+              <button
+                className={styles.buttonSm}
+                style={{ background: '#ef4444', color: 'white', marginLeft: '0.25rem' }}
+                onClick={() => handleDelete(pc.id)}
+              >
+                Delete
+              </button>
+            </div>
           </li>
         ))}
       </ul>
