@@ -1,62 +1,112 @@
-"use client";
+import { useState, useEffect } from 'react';
+import { supabase } from '../lib/supabaseClient';
+import styles from '../styles/Dashboard.module.css';
+import { toast } from 'react-hot-toast';
 
-import { useState } from "react";
-import { supabase } from "../lib/supabaseClient";
-import { toast } from "react-hot-toast";
+export default function PaycheckForm({ onSave }) {
+  const [amount, setAmount] = useState('');
+  const [schedule, setSchedule] = useState('biweekly');
+  const [nextDate, setNextDate] = useState('');
+  const [items, setItems] = useState([]);
+  const [editingId, setEditingId] = useState(null);
 
-export default function PaycheckForm({ onPaycheckAdded }) {
-  const [amount, setAmount] = useState("");
-  const [date, setDate] = useState("");
+  useEffect(() => {
+    fetchAll();
+  }, []);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const fetchAll = async () => {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    const { data } = await supabase
+      .from('paychecks')
+      .select('*')
+      .eq('user_id', user.id);
+    setItems(data || []);
+  };
 
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
+  const startEdit = (pc) => {
+    setEditingId(pc.id);
+    setAmount(pc.amount);
+    setSchedule(pc.schedule);
+    setNextDate(pc.next_date);
+  };
 
-    if (!user || userError) {
-      toast.error("You must be logged in to add a paycheck.");
-      return;
-    }
+  const handleSave = async () => {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-    const { error } = await supabase.from("paychecks").insert([
-      {
-        amount: parseFloat(amount),
-        date,
-        user_id: user.id,
-      },
-    ]);
+    const payload = {
+      user_id: user.id,
+      amount,
+      schedule,
+      next_date: nextDate,
+    };
+    if (editingId) payload.id = editingId;
+
+    const { error } = await supabase
+      .from('paychecks')
+      .upsert(payload, { onConflict: ['id'] });
 
     if (error) {
-      console.error("Insert error:", error.message);
-      toast.error("Failed to add paycheck.");
+      toast.error(error.message);
     } else {
-      toast.success("Paycheck added.");
-      setAmount("");
-      setDate("");
-      onPaycheckAdded(); // trigger data refresh
+      setAmount('');
+      setSchedule('biweekly');
+      setNextDate('');
+      setEditingId(null);
+      toast.success('Paycheck saved!');
+      fetchAll();
+      onSave();
     }
   };
 
+  const handleDelete = async (id) => {
+    await supabase.from('paychecks').delete().eq('id', id);
+    toast.success('Deleted');
+    fetchAll();
+    onSave();
+  };
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-2">
-      <input
-        type="number"
-        placeholder="Paycheck Amount"
-        value={amount}
-        onChange={(e) => setAmount(e.target.value)}
-        required
-        className="border px-2 py-1 rounded w-full"
-      />
-      <input
-        type="date"
-        value={date}
-        onChange={(e) => setDate(e.target.value)}
-        required
-        className="border px-2 py-1 rounded w-full"
-      />
-      <button type="submit" className="bg-green-600 text-white px-4 py-1 rounded">
-        Add Paycheck
+    <div className={styles.card}>
+      <h2>Paychecks</h2>
+      <ul className={styles.itemList}>
+        {items.map((pc) => (
+          <li key={pc.id} className={styles.listItem}>
+            <div className={styles.itemInfo}>
+              ${parseFloat(pc.amount).toFixed(2)} — {pc.schedule} — Next: {pc.next_date}
+            </div>
+            <div className={styles.itemActions}>
+              <button className={styles.buttonSm} onClick={() => startEdit(pc)}>Edit</button>
+              <button className={`${styles.buttonSm} ${styles.buttonDanger}`} onClick={() => handleDelete(pc.id)}>Delete</button>
+            </div>
+          </li>
+        ))}
+      </ul>
+
+      <div className={styles.formGroup}>
+        <label>Amount</label>
+        <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} />
+      </div>
+      <div className={styles.formGroup}>
+        <label>Schedule</label>
+        <select value={schedule} onChange={(e) => setSchedule(e.target.value)}>
+          <option value="weekly">Weekly</option>
+          <option value="biweekly">Biweekly</option>
+          <option value="bimonthly">Bimonthly</option>
+          <option value="monthly">Monthly</option>
+        </select>
+      </div>
+      <div className={styles.formGroup}>
+        <label>Next Date</label>
+        <input type="date" value={nextDate} onChange={(e) => setNextDate(e.target.value)} />
+      </div>
+
+      <button className={styles.button} onClick={handleSave}>
+        {editingId ? 'Update' : 'Add'} Paycheck
       </button>
-    </form>
+    </div>
   );
 }
