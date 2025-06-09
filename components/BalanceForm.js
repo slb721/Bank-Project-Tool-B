@@ -6,45 +6,81 @@ import styles from '../styles/Dashboard.module.css';
 export default function BalanceForm({ onSave, scenarioId }) {
   const [balance, setBalance] = useState('');
   const [message, setMessage] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    async function fetchBalance() {
+  // Fetch the balance for the active scenario (or default)
+  const fetchBalance = async () => {
+    setLoading(true);
+    try {
       const { data: { user } } = await supabase.auth.getUser();
-      const query = supabase
+      if (!user) return setBalance('');
+
+      let query = supabase
         .from('accounts')
         .select('current_balance')
         .eq('user_id', user.id);
 
-      if (scenarioId) query.eq('scenario_id', scenarioId);
-      else query.is('scenario_id', null);
+      if (scenarioId) query = query.eq('scenario_id', scenarioId);
+      else query = query.is('scenario_id', null);
 
-      const { data } = await query.single();
-      if (data && data.current_balance !== undefined) {
+      const { data, error } = await query.maybeSingle();
+
+      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found
+        console.error('Balance fetch error:', error);
+        setBalance('');
+        return;
+      }
+
+      if (data && typeof data.current_balance !== 'undefined') {
         setBalance(data.current_balance);
       } else {
         setBalance('');
       }
+    } catch (err) {
+      console.error('Balance fetch exception:', err);
+      setBalance('');
     }
+    setLoading(false);
+  };
+
+  useEffect(() => {
     fetchBalance();
+    // eslint-disable-next-line
   }, [scenarioId]);
 
   const handleSave = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    const payload = {
-      user_id: user.id,
-      current_balance: +balance,
-      scenario_id: scenarioId || null,
-    };
+    setLoading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setMessage('Not signed in.');
+        setLoading(false);
+        return;
+      }
+      const payload = {
+        user_id: user.id,
+        current_balance: +balance,
+        scenario_id: scenarioId || null,
+      };
 
-    const { error } = await supabase
-      .from('accounts')
-      .upsert(payload, { onConflict: ['user_id', 'scenario_id'] });
+      const { error } = await supabase
+        .from('accounts')
+        .upsert(payload, { onConflict: ['user_id', 'scenario_id'] });
 
-    if (!error) {
-      setMessage('Balance saved successfully!');
-      setTimeout(() => setMessage(''), 3000);
-      onSave();
+      if (!error) {
+        setMessage('Balance saved successfully!');
+        setTimeout(() => setMessage(''), 3000);
+        fetchBalance(); // Refresh displayed balance
+        if (onSave) onSave();
+      } else {
+        setMessage('Error saving balance.');
+        console.error('Save error:', error);
+      }
+    } catch (err) {
+      setMessage('Unexpected error.');
+      console.error('Save exception:', err);
     }
+    setLoading(false);
   };
 
   return (
@@ -58,11 +94,16 @@ export default function BalanceForm({ onSave, scenarioId }) {
           type="number"
           value={balance}
           onChange={(e) => setBalance(e.target.value)}
+          disabled={loading}
         />
       </div>
 
-      <button className={styles.button} onClick={handleSave}>
-        Save Balance
+      <button
+        className={styles.button}
+        onClick={handleSave}
+        disabled={loading}
+      >
+        {loading ? 'Saving...' : 'Save Balance'}
       </button>
     </div>
   );
