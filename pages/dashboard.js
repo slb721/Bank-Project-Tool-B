@@ -90,3 +90,9 @@ export default function DashboardPage() {
     </ScenarioProvider>
   );
 }
+<button onClick={async () => {
+  const { data: { user } } = await supabase.auth.getUser();
+  alert(user.id);
+}}>
+  Show My User ID
+</button>
