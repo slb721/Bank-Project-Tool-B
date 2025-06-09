@@ -44,6 +44,11 @@ ChartJS.register(
   Legend
 );
 
+// Utility to normalize scenarioId for use in JS/DB
+function normalizeScenarioId(scenarioId) {
+  return !scenarioId || scenarioId === '' ? null : scenarioId;
+}
+
 export default function Projections({ refresh, scenarioId }) {
   const [view, setView] = useState('daily');
   const [chartData, setChartData] = useState(null);
@@ -70,23 +75,28 @@ export default function Projections({ refresh, scenarioId }) {
           return;
         }
 
-        // --------- FETCH ACCOUNT FOR CURRENT SCENARIO ---------
-        let query = supabase
+        // --- FETCH ALL ACCOUNTS FOR USER ---
+        const { data: allAccounts, error: acctError } = await supabase
           .from('accounts')
-          .select('current_balance, id, user_id, scenario_id')
+          .select('current_balance, id, user_id, scenario_id, updated_at')
           .eq('user_id', user.id);
 
-        if (scenarioId) {
-          query = query.eq('scenario_id', scenarioId);
-        } else {
-          query = query.is('scenario_id', null);
+        if (acctError) {
+          setAccountExists(false);
+          setLoading(false);
+          return;
         }
 
-        const { data: acct, error: acctError } = await query.maybeSingle();
-        console.log('--- Projections Account Fetch ---');
-        console.log('ScenarioId:', scenarioId);
-        console.log('Account Row:', acct);
-        console.log('Account Error:', acctError);
+        // --- Filter for Correct Scenario ---
+        const normScenarioId = normalizeScenarioId(scenarioId);
+        let rows;
+        if (normScenarioId) {
+          rows = allAccounts.filter(r => r.scenario_id === normScenarioId);
+        } else {
+          rows = allAccounts.filter(r => r.scenario_id === null);
+        }
+        // Pick the latest updated_at row if multiples
+        let acct = rows.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))[0];
 
         if (!acct || typeof acct.current_balance === 'undefined') {
           setAccountExists(false);
@@ -100,14 +110,13 @@ export default function Projections({ refresh, scenarioId }) {
           .select('amount, schedule, next_date')
           .eq('user_id', user.id);
 
-        if (scenarioId) {
-          paycheckQuery = paycheckQuery.eq('scenario_id', scenarioId);
+        if (normScenarioId) {
+          paycheckQuery = paycheckQuery.eq('scenario_id', normScenarioId);
         } else {
           paycheckQuery = paycheckQuery.is('scenario_id', null);
         }
 
         const { data: pcs, error: pcsError } = await paycheckQuery;
-        console.log('Paychecks:', pcs, 'Error:', pcsError);
 
         // --------- FETCH CREDIT CARDS ---------
         let ccQuery = supabase
@@ -115,14 +124,13 @@ export default function Projections({ refresh, scenarioId }) {
           .select('next_due_date, next_due_amount, avg_future_amount')
           .eq('user_id', user.id);
 
-        if (scenarioId) {
-          ccQuery = ccQuery.eq('scenario_id', scenarioId);
+        if (normScenarioId) {
+          ccQuery = ccQuery.eq('scenario_id', normScenarioId);
         } else {
           ccQuery = ccQuery.is('scenario_id', null);
         }
 
         const { data: ccs, error: ccError } = await ccQuery;
-        console.log('Credit Cards:', ccs, 'Error:', ccError);
 
         // --------- DATA GUARDRAILS ---------
         const hasPaycheck = pcs && pcs.length > 0;
@@ -316,7 +324,6 @@ export default function Projections({ refresh, scenarioId }) {
         setChartData(null);
         setAccountExists(false);
         setLoading(false);
-        console.error('Projections run exception:', err);
       }
     }
 
