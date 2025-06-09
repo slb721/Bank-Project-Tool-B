@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import styles from '../styles/Dashboard.module.css';
 
-// Utility to normalize null scenario
+// Utility to normalize scenarioId
 function normalizeScenarioId(scenarioId) {
   return !scenarioId || scenarioId === '' ? null : scenarioId;
 }
@@ -14,6 +14,7 @@ export default function BalanceForm({ onSave, scenarioId }) {
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // Fetch all rows for this user, then filter for scenarioId (or null) in JavaScript
   const fetchBalance = async () => {
     setLoading(true);
     try {
@@ -25,36 +26,35 @@ export default function BalanceForm({ onSave, scenarioId }) {
         return;
       }
 
-      const normScenarioId = normalizeScenarioId(scenarioId);
-      let query = supabase
+      // Always fetch all rows for this user
+      const { data, error } = await supabase
         .from('accounts')
         .select('id, user_id, current_balance, scenario_id')
         .eq('user_id', user.id);
 
-      if (normScenarioId) {
-        query = query.eq('scenario_id', normScenarioId);
-      } else {
-        query = query.is('scenario_id', null);
-      }
-
-      const { data, error } = await query.maybeSingle();
-      console.log('[fetchBalance] user_id:', user.id, 'scenarioId:', scenarioId, 'normScenarioId:', normScenarioId, 'Returned:', data, 'Error:', error);
-
-      if (error && error.code !== 'PGRST116') {
+      if (error) {
         setMessage('Error fetching balance.');
         setBalance('');
         setLoading(false);
         return;
       }
 
-      if (data && typeof data.current_balance !== 'undefined') {
-        setBalance(data.current_balance);
+      const normScenarioId = normalizeScenarioId(scenarioId);
+      // Filter for the right scenario row (null for Default)
+      let row;
+      if (normScenarioId) {
+        row = data.find(r => r.scenario_id === normScenarioId);
+      } else {
+        row = data.find(r => r.scenario_id === null);
+      }
+
+      if (row && typeof row.current_balance !== 'undefined') {
+        setBalance(row.current_balance);
       } else {
         setBalance('');
       }
     } catch (err) {
       setMessage('Exception fetching balance.');
-      console.error('Balance fetch exception:', err);
       setBalance('');
     }
     setLoading(false);
@@ -81,14 +81,10 @@ export default function BalanceForm({ onSave, scenarioId }) {
         current_balance: +balance,
         scenario_id: normScenarioId,
       };
-      console.log('[handleSave] Upsert payload:', payload);
 
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('accounts')
-        .upsert(payload, { onConflict: ['user_id', 'scenario_id'] })
-        .select();
-
-      console.log('[handleSave] Upsert returned:', data, error);
+        .upsert(payload, { onConflict: ['user_id', 'scenario_id'] });
 
       if (!error) {
         setMessage('Balance saved successfully!');
@@ -97,11 +93,9 @@ export default function BalanceForm({ onSave, scenarioId }) {
         if (onSave) onSave();
       } else {
         setMessage('Error saving balance.');
-        console.error('Save error:', error);
       }
     } catch (err) {
       setMessage('Unexpected error.');
-      console.error('Save exception:', err);
     }
     setLoading(false);
   };
