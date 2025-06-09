@@ -1,5 +1,3 @@
-// pages/dashboard.js
-
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { supabase } from '../lib/supabaseClient';
@@ -8,12 +6,13 @@ import PaycheckForm from '../components/PaycheckForm';
 import CardForm from '../components/CardForm';
 import Projections from '../components/Projections';
 import ScenarioSwitcher from '../components/ScenarioSwitcher';
-import LifeEventForm from '../components/LifeEventForm'; // ADD THIS LINE
+import LifeEventForm from '../components/LifeEventForm';
 import { ScenarioProvider, useScenario } from '../context/ScenarioContext';
 import styles from '../styles/Dashboard.module.css';
 
 function DashboardInner() {
   const [refresh, setRefresh] = useState(0);
+  const [scenarioBump, setScenarioBump] = useState(0); // NEW
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
   const router = useRouter();
@@ -59,6 +58,11 @@ function DashboardInner() {
     };
   }, [router]);
 
+  // THIS IS THE KEY: force a "refresh" any time scenario changes
+  useEffect(() => {
+    setScenarioBump((v) => v + 1);
+  }, [activeScenario]);
+
   const bump = () => setRefresh((v) => v + 1);
 
   const handleSignOut = async () => {
@@ -93,23 +97,19 @@ function DashboardInner() {
           </button>
         </div>
       </div>
-
-      {/* --------- SCENARIO SWITCHER UI --------- */}
       <ScenarioSwitcher />
 
-      {/* Main dashboard grid with all forms, including LifeEventForm */}
       <div className={styles.dashboardGrid}>
-        <BalanceForm onSave={bump} scenarioId={activeScenario} />
-        <PaycheckForm onSave={bump} scenarioId={activeScenario} />
-        <CardForm onSave={bump} scenarioId={activeScenario} />
-        <LifeEventForm scenarioId={activeScenario} /> {/* <-- LIFE EVENTS IS RIGHT HERE */}
+        <BalanceForm onSave={bump} scenarioId={activeScenario} refresh={scenarioBump} />
+        <PaycheckForm onSave={bump} scenarioId={activeScenario} refresh={scenarioBump} />
+        <CardForm onSave={bump} scenarioId={activeScenario} refresh={scenarioBump} />
+        <LifeEventForm onSave={bump} scenarioId={activeScenario} refresh={scenarioBump} />
         <Projections
-  key={activeScenario}
-  refresh={refresh}
-  className={styles.chartWide}
-  scenarioId={activeScenario}
-/>
-
+          key={activeScenario}
+          refresh={refresh + scenarioBump}
+          className={styles.chartWide}
+          scenarioId={activeScenario}
+        />
       </div>
     </div>
   );
