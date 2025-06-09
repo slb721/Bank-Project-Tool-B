@@ -111,6 +111,10 @@ export default function CardForm({ onSave, scenarioId, refresh }) {
     }
   };
 
+  // Debug - see what is being rendered
+  // Uncomment if you still see nothing:
+  // console.log("Cards:", cards);
+
   return (
     <div className={styles.card}>
       <h2>Credit Cards</h2>
@@ -161,14 +165,15 @@ export default function CardForm({ onSave, scenarioId, refresh }) {
       )}
       <hr style={{ margin: "16px 0" }} />
       <h3>Saved Credit Cards</h3>
-      {cards.length === 0 ? (
-        <div>No cards saved.</div>
-      ) : (
-        <ul style={{ paddingLeft: 0 }}>
-          {cards.map(c => (
+      <ul style={{ paddingLeft: 0 }}>
+        {cards.length === 0 ? (
+          <div>No cards saved.</div>
+        ) : (
+          cards.map((c) => (
             <li key={c.id} style={{ marginBottom: 8, display: 'flex', alignItems: 'center', listStyle: 'none' }}>
-              <span style={{ minWidth: 120, display: 'inline-block' }}>
-                {c.name} - Next: {c.next_due_date ? c.next_due_date.slice(0, 10) : ''} - Due: ${c.next_due_amount}
+              <span>
+                {c.name ? `${c.name} - ` : ''}
+                Next: {c.next_due_date ? c.next_due_date.slice(0, 10) : ''} – Due: ${c.next_due_amount} – Avg: ${c.avg_future_amount}
               </span>
               <button
                 style={{
@@ -199,9 +204,9 @@ export default function CardForm({ onSave, scenarioId, refresh }) {
                 disabled={loading}
               >Delete</button>
             </li>
-          ))}
-        </ul>
-      )}
+          ))
+        )}
+      </ul>
     </div>
   );
 }

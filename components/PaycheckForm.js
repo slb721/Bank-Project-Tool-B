@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import styles from '../styles/Dashboard.module.css';
 
-// Use null for default
 function normalizeScenarioId(scenarioId) {
   return !scenarioId || scenarioId === '00000000-0000-0000-0000-000000000000' ? null : scenarioId;
 }
@@ -112,6 +111,10 @@ export default function PaycheckForm({ onSave, scenarioId, refresh }) {
     }
   };
 
+  // Debug - see what is being rendered
+  // Uncomment if you still see nothing:
+  // console.log("Paychecks:", paychecks);
+
   return (
     <div className={styles.card}>
       <h2>Paychecks</h2>
@@ -162,14 +165,15 @@ export default function PaycheckForm({ onSave, scenarioId, refresh }) {
       )}
       <hr style={{ margin: "16px 0" }} />
       <h3>Saved Paychecks</h3>
-      {paychecks.length === 0 ? (
-        <div>No paychecks saved.</div>
-      ) : (
-        <ul style={{ paddingLeft: 0 }}>
-          {paychecks.map(p => (
+      <ul style={{ paddingLeft: 0 }}>
+        {paychecks.length === 0 ? (
+          <div>No paychecks saved.</div>
+        ) : (
+          paychecks.map((p) => (
             <li key={p.id} style={{ marginBottom: 8, display: 'flex', alignItems: 'center', listStyle: 'none' }}>
-              <span style={{ minWidth: 120, display: 'inline-block' }}>
-                {p.name ? p.name + ' - ' : ''}${p.amount} - {p.schedule} - Next: {p.next_date ? p.next_date.slice(0, 10) : ''}
+              <span>
+                {p.name ? `${p.name} - ` : ''}
+                ${p.amount} – {p.schedule} – Next: {p.next_date ? p.next_date.slice(0, 10) : ''}
               </span>
               <button
                 style={{
@@ -200,9 +204,9 @@ export default function PaycheckForm({ onSave, scenarioId, refresh }) {
                 disabled={loading}
               >Delete</button>
             </li>
-          ))}
-        </ul>
-      )}
+          ))
+        )}
+      </ul>
     </div>
   );
 }
