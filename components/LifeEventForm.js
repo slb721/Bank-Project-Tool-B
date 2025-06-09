@@ -1,3 +1,5 @@
+// components/LifeEventForm.js
+
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import styles from '../styles/Dashboard.module.css';
@@ -7,21 +9,21 @@ const recurrenceOptions = [
   { value: 'weekly', label: 'Weekly' },
   { value: 'biweekly', label: 'Biweekly' },
   { value: 'monthly', label: 'Monthly' },
-  // { value: 'custom', label: 'Custom' }, // Enable if you add custom intervals
 ];
 
 const typeOptions = [
   { value: 'income', label: 'Income Increase' },
   { value: 'expense', label: 'Expense Increase' },
   { value: 'one_time_inflow', label: 'One-Time Inflow' },
-  { value: 'one_time_outflow', label: 'One-Time Outflow' }
+  { value: 'one_time_outflow', label: 'One-Time Outflow' },
+  { value: 'income_loss', label: 'Income Loss (e.g., unemployment)' },
 ];
 
 function normalizeScenarioId(scenarioId) {
   return !scenarioId || scenarioId === '' ? '00000000-0000-0000-0000-000000000000' : scenarioId;
 }
 
-export default function LifeEventForm({ scenarioId }) {
+export default function LifeEventForm({ onSave, scenarioId }) {
   const [label, setLabel] = useState('');
   const [type, setType] = useState('income');
   const [amount, setAmount] = useState('');
@@ -45,7 +47,6 @@ export default function LifeEventForm({ scenarioId }) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         setEvents([]);
-        setMessage('No user logged in.');
         setLoading(false);
         return;
       }
@@ -56,18 +57,10 @@ export default function LifeEventForm({ scenarioId }) {
         .eq('user_id', user.id)
         .eq('scenario_id', normScenarioId)
         .order('start_date', { ascending: true });
-
-      if (error) {
-        setMessage('Error fetching events: ' + (error.message || JSON.stringify(error)));
-        setEvents([]);
-      } else {
-        setEvents(data || []);
-      }
-    } catch (err) {
-      setMessage('Exception fetching events.');
-      setEvents([]);
+      setEvents(error ? [] : (data || []));
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const resetForm = () => {
@@ -99,7 +92,7 @@ export default function LifeEventForm({ scenarioId }) {
         label: label || '(No Label)',
         amount: +amount,
         start_date: startDate,
-        end_date: recurrence === 'one_time' ? null : endDate,
+        end_date: recurrence === 'one_time' || !endDate ? null : endDate,
         recurrence
       };
 
@@ -120,13 +113,13 @@ export default function LifeEventForm({ scenarioId }) {
         setTimeout(() => setMessage(''), 2000);
         resetForm();
         await fetchEvents();
+        if (onSave) onSave();
       } else {
         setMessage('Error saving event: ' + (error.message || JSON.stringify(error)));
       }
-    } catch (err) {
-      setMessage('Unexpected error: ' + (err.message || JSON.stringify(err)));
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleEdit = (event) => {
@@ -148,6 +141,7 @@ export default function LifeEventForm({ scenarioId }) {
         setTimeout(() => setMessage(''), 2000);
         resetForm();
         await fetchEvents();
+        if (onSave) onSave();
       } else {
         setMessage('Error deleting: ' + (error.message || JSON.stringify(error)));
       }
@@ -167,7 +161,7 @@ export default function LifeEventForm({ scenarioId }) {
           type="text"
           value={label}
           onChange={e => setLabel(e.target.value)}
-          placeholder="E.g., New job, new car, tax refund, etc."
+          placeholder="E.g., New job, parental leave, tax refund, etc."
           disabled={loading}
         />
       </div>
@@ -216,7 +210,7 @@ export default function LifeEventForm({ scenarioId }) {
       </div>
       {recurrence !== 'one_time' && (
         <div className={styles.formGroup}>
-          <label>End Date</label>
+          <label>End Date <span style={{ color: '#999', fontWeight: 'normal' }}>(leave blank for permanent change)</span></label>
           <input
             type="date"
             value={endDate}
@@ -226,11 +220,7 @@ export default function LifeEventForm({ scenarioId }) {
         </div>
       )}
 
-      <button
-        className={styles.button}
-        onClick={handleSave}
-        disabled={loading}
-      >
+      <button className={styles.button} onClick={handleSave} disabled={loading}>
         {loading ? 'Saving...' : editId ? 'Update Event' : 'Add Event'}
       </button>
       {editId && (
@@ -253,8 +243,8 @@ export default function LifeEventForm({ scenarioId }) {
               {' | '}
               {row.recurrence.replace('_', ' ')} {row.start_date ? `from ${row.start_date.slice(0,10)}` : ''}
               {row.end_date && ` to ${row.end_date.slice(0,10)}`}
-              <button style={{ marginLeft: 8 }} onClick={() => handleEdit(row)} disabled={loading}>Edit</button>
-              <button style={{ marginLeft: 4 }} onClick={() => handleDelete(row.id)} disabled={loading}>Delete</button>
+              <button className={styles.button} style={{ marginLeft: 8 }} onClick={() => handleEdit(row)} disabled={loading}>Edit</button>
+              <button className={styles.button} style={{ marginLeft: 4, backgroundColor: '#ef4444', color: 'white' }} onClick={() => handleDelete(row.id)} disabled={loading}>Delete</button>
             </li>
           ))}
         </ul>

@@ -1,5 +1,3 @@
-// components/CardForm.js
-
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import styles from '../styles/Dashboard.module.css';
@@ -8,7 +6,7 @@ function normalizeScenarioId(scenarioId) {
   return !scenarioId || scenarioId === '' ? '00000000-0000-0000-0000-000000000000' : scenarioId;
 }
 
-export default function CardForm({ scenarioId }) {
+export default function CardForm({ onSave, scenarioId }) {
   const [name, setName] = useState('');
   const [nextDueDate, setNextDueDate] = useState('');
   const [nextDueAmount, setNextDueAmount] = useState('');
@@ -30,7 +28,6 @@ export default function CardForm({ scenarioId }) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         setCards([]);
-        setMessage('No user logged in.');
         setLoading(false);
         return;
       }
@@ -41,18 +38,10 @@ export default function CardForm({ scenarioId }) {
         .eq('user_id', user.id)
         .eq('scenario_id', normScenarioId)
         .order('updated_at', { ascending: false });
-
-      if (error) {
-        setMessage('Error fetching cards: ' + (error.message || JSON.stringify(error)));
-        setCards([]);
-      } else {
-        setCards(data || []);
-      }
-    } catch (err) {
-      setMessage('Exception fetching cards.');
-      setCards([]);
+      setCards(error ? [] : (data || []));
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const resetForm = () => {
@@ -93,22 +82,19 @@ export default function CardForm({ scenarioId }) {
           .from('credit_cards')
           .insert(payload);
       }
-
       const { error } = result;
       if (!error) {
         setMessage('Card saved successfully!');
-        setTimeout(() => setMessage(''), 3000);
+        setTimeout(() => setMessage(''), 2000);
         resetForm();
         await fetchCards();
+        if (onSave) onSave();
       } else {
         setMessage('Error saving card: ' + (error.message || JSON.stringify(error)));
-        console.error('Error saving card:', error);
       }
-    } catch (err) {
-      setMessage('Unexpected error: ' + (err.message || JSON.stringify(err)));
-      console.error('Unexpected error saving card:', err);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleEdit = (row) => {
@@ -125,9 +111,10 @@ export default function CardForm({ scenarioId }) {
       const { error } = await supabase.from('credit_cards').delete().eq('id', id);
       if (!error) {
         setMessage('Deleted successfully');
-        setTimeout(() => setMessage(''), 3000);
+        setTimeout(() => setMessage(''), 2000);
         resetForm();
         await fetchCards();
+        if (onSave) onSave();
       } else {
         setMessage('Error deleting: ' + (error.message || JSON.stringify(error)));
       }
@@ -179,11 +166,7 @@ export default function CardForm({ scenarioId }) {
         />
       </div>
 
-      <button
-        className={styles.button}
-        onClick={handleSave}
-        disabled={loading}
-      >
+      <button className={styles.button} onClick={handleSave} disabled={loading}>
         {loading ? 'Saving...' : editId ? 'Update Card' : 'Add Card'}
       </button>
       {editId && (
@@ -203,8 +186,8 @@ export default function CardForm({ scenarioId }) {
             <li key={row.id} style={{ marginBottom: 8 }}>
               <b>{row.name || 'Card'}</b>: ${row.next_due_amount} (Next: {row.next_due_date ? row.next_due_date.slice(0, 10) : 'N/A'})
               , Avg Future: ${row.avg_future_amount}
-              <button style={{ marginLeft: 8 }} onClick={() => handleEdit(row)} disabled={loading}>Edit</button>
-              <button style={{ marginLeft: 4 }} onClick={() => handleDelete(row.id)} disabled={loading}>Delete</button>
+              <button className={styles.button} style={{ marginLeft: 8 }} onClick={() => handleEdit(row)} disabled={loading}>Edit</button>
+              <button className={styles.button} style={{ marginLeft: 4, backgroundColor: '#ef4444', color: 'white' }} onClick={() => handleDelete(row.id)} disabled={loading}>Delete</button>
             </li>
           ))}
         </ul>

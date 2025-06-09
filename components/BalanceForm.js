@@ -1,11 +1,11 @@
 // components/BalanceForm.js
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import styles from '../styles/Dashboard.module.css';
 
 function normalizeScenarioId(scenarioId) {
-  // Use default UUID for default scenario, not null!
+  // Always use the explicit default scenario ID
   return !scenarioId || scenarioId === '' ? '00000000-0000-0000-0000-000000000000' : scenarioId;
 }
 
@@ -21,40 +21,47 @@ export default function BalanceForm({ onSave, scenarioId }) {
 
   const fetchBalance = async () => {
     setLoading(true);
+    setMessage('');
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         setBalance('');
-        setMessage('No user logged in.');
         setLoading(false);
         return;
+      }
+      const normScenarioId = normalizeScenarioId(scenarioId);
+      // Find or create the default scenario for this user if missing
+      if (normScenarioId === '00000000-0000-0000-0000-000000000000') {
+        // Ensure scenario exists for this user
+        const { data: existingDefault } = await supabase
+          .from('scenarios')
+          .select('id')
+          .eq('id', normScenarioId)
+          .eq('user_id', user.id)
+          .maybeSingle();
+        if (!existingDefault) {
+          await supabase.from('scenarios').insert({
+            id: normScenarioId,
+            user_id: user.id,
+            name: 'Default'
+          });
+        }
       }
       const { data, error } = await supabase
         .from('accounts')
-        .select('id, user_id, current_balance, scenario_id, updated_at')
-        .eq('user_id', user.id);
-
+        .select('current_balance, id')
+        .eq('user_id', user.id)
+        .eq('scenario_id', normScenarioId)
+        .order('updated_at', { ascending: false })
+        .maybeSingle();
       if (error) {
-        setMessage('Error fetching balance: ' + (error.message || JSON.stringify(error)));
         setBalance('');
-        setLoading(false);
-        return;
-      }
-
-      const normScenarioId = normalizeScenarioId(scenarioId);
-      let rows = data.filter(r => r.scenario_id === normScenarioId);
-      let row = rows.sort((a, b) => new Date(b.updated_at || 0) - new Date(a.updated_at || 0))[0];
-
-      if (row && typeof row.current_balance !== 'undefined') {
-        setBalance(row.current_balance);
       } else {
-        setBalance('');
+        setBalance(data ? data.current_balance : '');
       }
-    } catch (err) {
-      setMessage('Exception fetching balance.');
-      setBalance('');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleSave = async () => {
@@ -68,53 +75,57 @@ export default function BalanceForm({ onSave, scenarioId }) {
         return;
       }
       const normScenarioId = normalizeScenarioId(scenarioId);
-      const payload = {
-        user_id: user.id,
-        current_balance: +balance,
-        scenario_id: normScenarioId,
-      };
-
-      const { error } = await supabase
+      // Find existing row
+      const { data: existingRow } = await supabase
         .from('accounts')
-        .upsert(payload, { onConflict: ['user_id', 'scenario_id'] });
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('scenario_id', normScenarioId)
+        .maybeSingle();
 
+      let result;
+      if (existingRow) {
+        result = await supabase
+          .from('accounts')
+          .update({ current_balance: +balance })
+          .eq('id', existingRow.id);
+      } else {
+        result = await supabase
+          .from('accounts')
+          .insert({
+            user_id: user.id,
+            scenario_id: normScenarioId,
+            current_balance: +balance
+          });
+      }
+      const { error } = result;
       if (!error) {
-        setMessage('Balance saved successfully!');
+        setMessage('Saved successfully!');
         setTimeout(() => setMessage(''), 3000);
-        await fetchBalance();
         if (onSave) onSave();
       } else {
         setMessage('Error saving balance: ' + (error.message || JSON.stringify(error)));
-        console.error('Error saving balance:', error);
       }
-    } catch (err) {
-      setMessage('Unexpected error: ' + (err.message || JSON.stringify(err)));
-      console.error('Unexpected error saving balance:', err);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (
     <div className={styles.card}>
       <h2 className={styles.heading}>Current Balance</h2>
       {message && <div className={styles.success}>{message}</div>}
-
       <div className={styles.formGroup}>
         <label>Balance</label>
         <input
           type="number"
           value={balance}
-          onChange={(e) => setBalance(e.target.value)}
+          onChange={e => setBalance(e.target.value)}
           disabled={loading}
         />
       </div>
-
-      <button
-        className={styles.button}
-        onClick={handleSave}
-        disabled={loading}
-      >
-        {loading ? 'Saving...' : 'Save Balance'}
+      <button className={styles.button} onClick={handleSave} disabled={loading}>
+        {loading ? 'Saving...' : 'Save'}
       </button>
     </div>
   );

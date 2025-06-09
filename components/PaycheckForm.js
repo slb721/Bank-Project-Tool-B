@@ -1,5 +1,3 @@
-// components/PaycheckForm.js
-
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import styles from '../styles/Dashboard.module.css';
@@ -8,7 +6,7 @@ function normalizeScenarioId(scenarioId) {
   return !scenarioId || scenarioId === '' ? '00000000-0000-0000-0000-000000000000' : scenarioId;
 }
 
-export default function PaycheckForm({ scenarioId }) {
+export default function PaycheckForm({ onSave, scenarioId }) {
   const [amount, setAmount] = useState('');
   const [schedule, setSchedule] = useState('biweekly');
   const [nextDate, setNextDate] = useState('');
@@ -29,7 +27,6 @@ export default function PaycheckForm({ scenarioId }) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         setPaychecks([]);
-        setMessage('No user logged in.');
         setLoading(false);
         return;
       }
@@ -40,18 +37,10 @@ export default function PaycheckForm({ scenarioId }) {
         .eq('user_id', user.id)
         .eq('scenario_id', normScenarioId)
         .order('updated_at', { ascending: false });
-
-      if (error) {
-        setMessage('Error fetching paychecks: ' + (error.message || JSON.stringify(error)));
-        setPaychecks([]);
-      } else {
-        setPaychecks(data || []);
-      }
-    } catch (err) {
-      setMessage('Exception fetching paychecks.');
-      setPaychecks([]);
+      setPaychecks(error ? [] : (data || []));
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const resetForm = () => {
@@ -90,22 +79,19 @@ export default function PaycheckForm({ scenarioId }) {
           .from('paychecks')
           .insert(payload);
       }
-
       const { error } = result;
       if (!error) {
         setMessage('Paycheck saved successfully!');
-        setTimeout(() => setMessage(''), 3000);
+        setTimeout(() => setMessage(''), 2000);
         resetForm();
         await fetchPaychecks();
+        if (onSave) onSave();
       } else {
         setMessage('Error saving paycheck: ' + (error.message || JSON.stringify(error)));
-        console.error('Error saving paycheck:', error);
       }
-    } catch (err) {
-      setMessage('Unexpected error: ' + (err.message || JSON.stringify(err)));
-      console.error('Unexpected error saving paycheck:', err);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleEdit = (row) => {
@@ -121,9 +107,10 @@ export default function PaycheckForm({ scenarioId }) {
       const { error } = await supabase.from('paychecks').delete().eq('id', id);
       if (!error) {
         setMessage('Deleted successfully');
-        setTimeout(() => setMessage(''), 3000);
+        setTimeout(() => setMessage(''), 2000);
         resetForm();
         await fetchPaychecks();
+        if (onSave) onSave();
       } else {
         setMessage('Error deleting: ' + (error.message || JSON.stringify(error)));
       }
@@ -169,11 +156,7 @@ export default function PaycheckForm({ scenarioId }) {
         />
       </div>
 
-      <button
-        className={styles.button}
-        onClick={handleSave}
-        disabled={loading}
-      >
+      <button className={styles.button} onClick={handleSave} disabled={loading}>
         {loading ? 'Saving...' : editId ? 'Update Paycheck' : 'Add Paycheck'}
       </button>
       {editId && (
@@ -192,8 +175,8 @@ export default function PaycheckForm({ scenarioId }) {
           {paychecks.map((row) => (
             <li key={row.id} style={{ marginBottom: 8 }}>
               <b>${row.amount}</b> {row.schedule}, Next: {row.next_date ? row.next_date.slice(0, 10) : 'N/A'}
-              <button style={{ marginLeft: 8 }} onClick={() => handleEdit(row)} disabled={loading}>Edit</button>
-              <button style={{ marginLeft: 4 }} onClick={() => handleDelete(row.id)} disabled={loading}>Delete</button>
+              <button className={styles.button} style={{ marginLeft: 8 }} onClick={() => handleEdit(row)} disabled={loading}>Edit</button>
+              <button className={styles.button} style={{ marginLeft: 4, backgroundColor: '#ef4444', color: 'white' }} onClick={() => handleDelete(row.id)} disabled={loading}>Delete</button>
             </li>
           ))}
         </ul>
