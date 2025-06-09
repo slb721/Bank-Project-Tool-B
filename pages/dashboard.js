@@ -103,7 +103,13 @@ function DashboardInner() {
         <PaycheckForm onSave={bump} scenarioId={activeScenario} />
         <CardForm onSave={bump} scenarioId={activeScenario} />
         <LifeEventForm scenarioId={activeScenario} /> {/* <-- LIFE EVENTS IS RIGHT HERE */}
-        <Projections refresh={refresh} className={styles.chartWide} scenarioId={activeScenario} />
+        <Projections
+  key={activeScenario}
+  refresh={refresh}
+  className={styles.chartWide}
+  scenarioId={activeScenario}
+/>
+
       </div>
     </div>
   );
