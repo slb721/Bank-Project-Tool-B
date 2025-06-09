@@ -8,6 +8,7 @@ export default function ScenarioSwitcher({ onChange }) {
   const [scenarios, setScenarios] = useState([]);
   const [newScenario, setNewScenario] = useState('');
   const [duplicating, setDuplicating] = useState(false);
+  const [resetting, setResetting] = useState(false);
 
   useEffect(() => { fetchScenarios(); }, []);
 
@@ -47,7 +48,6 @@ export default function ScenarioSwitcher({ onChange }) {
       name: original.name + ' (Copy)'
     }).select();
     if (data && data[0]) {
-      // Optionally duplicate related data here (not implemented)
       await fetchScenarios();
       setActiveScenario(data[0].id);
       if (onChange) onChange();
@@ -63,9 +63,27 @@ export default function ScenarioSwitcher({ onChange }) {
     if (onChange) onChange();
   };
 
+  // --- RESET FUNCTIONALITY ---
+  const handleReset = async () => {
+    if (!activeScenario) {
+      alert("You can't reset the default scenario.");
+      return;
+    }
+    if (!window.confirm('Reset ALL values for this scenario? This cannot be undone.')) return;
+    setResetting(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    // Remove all paychecks, cards, events, and account for this scenario
+    await supabase.from('paychecks').delete().eq('user_id', user.id).eq('scenario_id', activeScenario);
+    await supabase.from('credit_cards').delete().eq('user_id', user.id).eq('scenario_id', activeScenario);
+    await supabase.from('life_events').delete().eq('user_id', user.id).eq('scenario_id', activeScenario);
+    await supabase.from('accounts').delete().eq('user_id', user.id).eq('scenario_id', activeScenario);
+    setResetting(false);
+    if (onChange) onChange();
+  };
+
   return (
     <div className={styles.card} style={{ marginBottom: 16 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
         <label><b>Scenario:</b></label>
         <select value={activeScenario || ''} onChange={handleSelect} style={{ minWidth: 200 }}>
           <option value="">Default</option>
@@ -83,10 +101,29 @@ export default function ScenarioSwitcher({ onChange }) {
         <button onClick={handleCreate} disabled={!newScenario.trim()}>+ New</button>
         <button onClick={handleDuplicate} disabled={!activeScenario || duplicating}>Duplicate</button>
         {activeScenario && (
-          <button
-            onClick={() => handleDelete(activeScenario)}
-            style={{ background: '#fff7f7', color: '#c0392b', border: '1px solid #c0392b', borderRadius: 5 }}
-          >Delete</button>
+          <>
+            <button
+              onClick={handleReset}
+              style={{
+                background: '#f4e5c3',
+                color: '#b27805',
+                border: '1px solid #d8b566',
+                borderRadius: 5
+              }}
+              disabled={resetting}
+            >
+              {resetting ? 'Resetting...' : 'Reset Scenario'}
+            </button>
+            <button
+              onClick={() => handleDelete(activeScenario)}
+              style={{
+                background: '#fff7f7',
+                color: '#c0392b',
+                border: '1px solid #c0392b',
+                borderRadius: 5
+              }}
+            >Delete</button>
+          </>
         )}
       </div>
     </div>

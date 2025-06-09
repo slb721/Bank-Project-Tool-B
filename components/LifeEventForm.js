@@ -123,30 +123,36 @@ export default function LifeEventForm({ scenarioId, refresh, onSave }) {
     }
   };
 
+  // UI logic for Job Loss: require selecting paycheck
+  const isJobLoss = type === 'income_loss';
+
   return (
     <div className={styles.card}>
       <h2>Life Events</h2>
       {message && <div className={styles.success}>{message}</div>}
+
       <div className={styles.formGroup}>
-        <label>Label</label>
-        <input
-          type="text"
-          value={label}
-          onChange={e => setLabel(e.target.value)}
-          disabled={loading}
-        />
+        <label>Label/Description</label>
+        <input type="text" value={label} onChange={e => setLabel(e.target.value)} disabled={loading} />
       </div>
+
       <div className={styles.formGroup}>
         <label>Type</label>
         <select value={type} onChange={e => setType(e.target.value)} disabled={loading}>
-          <option value="one_time_outflow">One-time Outflow</option>
-          <option value="recurring_expense_increase">Recurring Expense Increase</option>
-          <option value="recurring_income_loss">Recurring Income Loss</option>
-          <option value="job_loss">Job Loss (Pick income stream)</option>
+          <option value="one_time_outflow">One-Time Expense</option>
+          <option value="expense_increase">Expense Increase (recurring)</option>
+          <option value="income_increase">Income Increase (recurring)</option>
+          <option value="income_loss">Job Loss/Leave (pick income stream)</option>
         </select>
       </div>
+
       <div className={styles.formGroup}>
-        <label>Amount</label>
+        <label>
+          Amount
+          <span style={{ color: '#888', fontSize: 11, marginLeft: 5 }}>
+            ({type.startsWith('income') ? '+' : '-'} value)
+          </span>
+        </label>
         <input
           type="number"
           value={amount}
@@ -154,6 +160,21 @@ export default function LifeEventForm({ scenarioId, refresh, onSave }) {
           disabled={loading}
         />
       </div>
+
+      {isJobLoss && (
+        <div className={styles.formGroup}>
+          <label>Which Income Stream?</label>
+          <select value={relatedPaycheckId} onChange={e => setRelatedPaycheckId(e.target.value)} disabled={loading}>
+            <option value="">Select</option>
+            {paychecks.map(p => (
+              <option key={p.id} value={p.id}>
+                {p.name || '$' + p.amount + ' – ' + p.schedule}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
       <div className={styles.formGroup}>
         <label>Start Date</label>
         <input
@@ -163,16 +184,18 @@ export default function LifeEventForm({ scenarioId, refresh, onSave }) {
           disabled={loading}
         />
       </div>
-      <div className={styles.formGroup}>
-        <label>End Date (if any)</label>
-        <input
-          type="date"
-          value={endDate}
-          onChange={e => setEndDate(e.target.value)}
-          disabled={loading}
-        />
-      </div>
-      {(type === 'recurring_expense_increase' || type === 'recurring_income_loss') && (
+      {(type === 'expense_increase' || type === 'income_increase' || isJobLoss) && (
+        <div className={styles.formGroup}>
+          <label>End Date (leave blank for ongoing)</label>
+          <input
+            type="date"
+            value={endDate}
+            onChange={e => setEndDate(e.target.value)}
+            disabled={loading}
+          />
+        </div>
+      )}
+      {(type === 'expense_increase' || type === 'income_increase') && (
         <div className={styles.formGroup}>
           <label>Recurrence</label>
           <select value={recurrence} onChange={e => setRecurrence(e.target.value)} disabled={loading}>
@@ -184,23 +207,7 @@ export default function LifeEventForm({ scenarioId, refresh, onSave }) {
           </select>
         </div>
       )}
-      {type === 'job_loss' && (
-        <div className={styles.formGroup}>
-          <label>Select income stream (paycheck):</label>
-          <select
-            value={relatedPaycheckId}
-            onChange={e => setRelatedPaycheckId(e.target.value)}
-            disabled={loading}
-          >
-            <option value="">Select paycheck</option>
-            {paychecks.map(p => (
-              <option key={p.id} value={p.id}>
-                {p.name || `Paycheck ${p.id.slice(0, 4)}`} (${p.amount} {p.schedule})
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
+
       <button className={styles.button} onClick={handleSave} disabled={loading}>
         {loading ? 'Saving...' : editId ? 'Update' : 'Add'}
       </button>
@@ -218,18 +225,17 @@ export default function LifeEventForm({ scenarioId, refresh, onSave }) {
           events.map((e) => (
             <li key={e.id} style={{ marginBottom: 8, display: 'flex', alignItems: 'center', listStyle: 'none' }}>
               <span>
-                <b>{e.label}</b> — {e.type.replace(/_/g, ' ')} — ${e.amount} — {e.start_date?.slice(0, 10)}
-                {e.end_date && ` to ${e.end_date.slice(0, 10)}`}
-                {e.recurrence && ` (${e.recurrence})`}
-                {e.related_paycheck_id && (
-                  <>
-                    {' '}for{' '}
-                    {
-                      (paychecks.find(p => p.id === e.related_paycheck_id)?.name) ||
-                      `Paycheck ${e.related_paycheck_id.slice(0, 4)}`
-                    }
-                  </>
-                )}
+                <b>{e.label}</b> — {e.type.replace(/_/g, ' ')}
+                {e.amount ? ' $' + e.amount : ''}
+                {e.related_paycheck_id && paychecks.find(p => p.id === e.related_paycheck_id)
+                  ? <> (Income: {paychecks.find(p => p.id === e.related_paycheck_id)?.name || ''})</>
+                  : ''}
+                <br />
+                <small>
+                  {e.start_date ? `Start: ${e.start_date.slice(0, 10)}` : ''}
+                  {e.end_date ? ` – End: ${e.end_date.slice(0, 10)}` : ''}
+                  {e.recurrence ? ` – Every: ${e.recurrence}` : ''}
+                </small>
               </span>
               <button
                 style={{
