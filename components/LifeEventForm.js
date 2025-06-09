@@ -1,5 +1,3 @@
-// components/LifeEventForm.js
-
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import styles from '../styles/Dashboard.module.css';

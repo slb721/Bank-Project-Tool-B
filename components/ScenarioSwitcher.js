@@ -12,25 +12,16 @@ export default function ScenarioSwitcher({ onReset }) {
   const [newName, setNewName] = useState('');
   const [message, setMessage] = useState('');
 
-  useEffect(() => {
-    fetchScenarios();
-    // eslint-disable-next-line
-  }, []);
+  useEffect(() => { fetchScenarios(); }, []);
 
   const fetchScenarios = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    const { data } = await supabase
-      .from('scenarios')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at');
+    const { data } = await supabase.from('scenarios').select('*').eq('user_id', user.id).order('created_at');
     setScenarios(data || []);
   };
 
-  const handleSelect = (e) => {
-    setActiveScenario(e.target.value);
-  };
+  const handleSelect = (e) => setActiveScenario(e.target.value);
 
   const handleCreate = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -73,11 +64,11 @@ export default function ScenarioSwitcher({ onReset }) {
   };
 
   const handleReset = async () => {
-    if (!window.confirm('This will permanently delete all data for this scenario. Continue?')) return;
+    if (!window.confirm('This will permanently delete all paychecks, credit cards, balances, and life events for this scenario. Are you sure?')) return;
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     const normScenarioId = normalizeScenarioId(activeScenario);
-  
+
     const del = async (table) => {
       if (normScenarioId === null) {
         await supabase.from(table).delete().eq('user_id', user.id).is('scenario_id', null);
@@ -89,10 +80,11 @@ export default function ScenarioSwitcher({ onReset }) {
     await del('paychecks');
     await del('credit_cards');
     await del('life_events');
+    setMessage('Scenario reset.');
     if (onReset) onReset();
-    window.location.reload();
+    setTimeout(() => setMessage(''), 1200);
+    setTimeout(() => { window.location.reload(); }, 200);
   };
-  
 
   return (
     <div className={styles.card} style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>

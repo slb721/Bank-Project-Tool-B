@@ -15,10 +15,7 @@ export default function PaycheckForm({ onSave, scenarioId, refresh }) {
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    fetchPaychecks();
-    // eslint-disable-next-line
-  }, [scenarioId, refresh]);
+  useEffect(() => { fetchPaychecks(); }, [scenarioId, refresh]);
 
   const fetchPaychecks = async () => {
     setLoading(true);
@@ -154,12 +151,40 @@ export default function PaycheckForm({ onSave, scenarioId, refresh }) {
       {paychecks.length === 0 ? (
         <div>No paychecks saved.</div>
       ) : (
-        <ul>
+        <ul style={{ paddingLeft: 0 }}>
           {paychecks.map(p => (
-            <li key={p.id}>
-              ${p.amount} - {p.schedule} - Next: {p.next_date ? p.next_date.slice(0, 10) : ''}
-              <button style={{ marginLeft: 8 }} onClick={() => handleEdit(p)} disabled={loading}>✏️</button>
-              <button style={{ marginLeft: 4 }} onClick={() => handleDelete(p.id)} disabled={loading}>🗑️</button>
+            <li key={p.id} style={{ marginBottom: 8, display: 'flex', alignItems: 'center', listStyle: 'none' }}>
+              <span style={{ minWidth: 120, display: 'inline-block' }}>
+                ${p.amount} - {p.schedule} - Next: {p.next_date ? p.next_date.slice(0, 10) : ''}
+              </span>
+              <button
+                style={{
+                  marginLeft: 12,
+                  padding: '2px 10px',
+                  fontSize: 13,
+                  background: '#e3edfc',
+                  color: '#2466a7',
+                  border: '1px solid #bdd7f6',
+                  borderRadius: 5,
+                  cursor: 'pointer',
+                  marginRight: 6,
+                }}
+                onClick={() => handleEdit(p)}
+                disabled={loading}
+              >Edit</button>
+              <button
+                style={{
+                  padding: '2px 10px',
+                  fontSize: 13,
+                  background: '#fff7f7',
+                  color: '#c0392b',
+                  border: '1px solid #c0392b',
+                  borderRadius: 5,
+                  cursor: 'pointer'
+                }}
+                onClick={() => handleDelete(p.id)}
+                disabled={loading}
+              >Delete</button>
             </li>
           ))}
         </ul>
