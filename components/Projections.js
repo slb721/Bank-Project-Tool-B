@@ -352,4 +352,50 @@ export default function Projections({ refresh, scenarioId }) {
         <div style={{ height: '320px' }}>
           <Chart
             data={chartData}
-            op
+            options={{
+              responsive: true,
+              maintainAspectRatio: false,
+              scales: {
+                x: { grid: { display: false }, ticks: { maxTicksLimit: 12 } },
+                y: { position: 'left', title: { display: true, text: 'Balance ($)' } },
+                y1: view === 'monthly'
+                  ? {}
+                  : { position: 'right', title: { display: true, text: 'Flow ($)' }, grid: { drawOnChartArea: false } },
+              },
+              plugins: {
+                legend: { position: 'top' },
+                tooltip: { mode: 'index', intersect: false },
+              },
+            }}
+          />
+        </div>
+      </div>
+
+      <div className={styles.statsGrid}>
+        <div className={styles.statCard}>
+          <small>Lowest Point</small>
+          <p className={styles.statValue}>
+            {format(stats.lowPoint.date, 'MM/dd/yyyy')} @ ${stats.lowPoint.balance.toFixed(2)}
+          </p>
+          {stats.negDay && <p className={styles.statWarn}>⚠️ Below zero on {stats.negDay}</p>}
+        </div>
+        <div className={styles.statCard}>
+          <small>Annualized Growth</small>
+          <p className={styles.statValue}>{stats.growth}%</p>
+        </div>
+        <div className={styles.statCard}>
+          <small>Required Starting Balance</small>
+          <p className={styles.statValue}>${stats.requiredBalance}</p>
+        </div>
+        <div className={styles.statCard}>
+          <small>Required Paycheck</small>
+          {stats.requiredPay !== null ? (
+            <p className={styles.statValue}>${stats.requiredPay}</p>
+          ) : (
+            <p className={styles.statPlaceholder}>Add paycheck & credit card</p>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
