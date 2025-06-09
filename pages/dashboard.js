@@ -12,7 +12,7 @@ import styles from '../styles/Dashboard.module.css';
 
 function DashboardInner() {
   const [refresh, setRefresh] = useState(0);
-  const [scenarioBump, setScenarioBump] = useState(0); // NEW
+  const [scenarioBump, setScenarioBump] = useState(0);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
   const router = useRouter();
@@ -28,12 +28,10 @@ function DashboardInner() {
           router.push('/login');
           return;
         }
-
         if (!user) {
           router.push('/login');
           return;
         }
-
         setUser(user);
       } catch (err) {
         console.error('Unexpected auth error:', err);
@@ -42,9 +40,7 @@ function DashboardInner() {
         setLoading(false);
       }
     };
-
     checkAuth();
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_OUT' || !session) {
         router.push('/login');
@@ -52,13 +48,11 @@ function DashboardInner() {
         setUser(session.user);
       }
     });
-
     return () => {
       subscription?.unsubscribe();
     };
   }, [router]);
 
-  // THIS IS THE KEY: force a "refresh" any time scenario changes
   useEffect(() => {
     setScenarioBump((v) => v + 1);
   }, [activeScenario]);
@@ -81,11 +75,9 @@ function DashboardInner() {
       </div>
     );
   }
+  if (!user) return null;
 
-  if (!user) {
-    return null;
-  }
-
+  // key={activeScenario} on Projections forces chart remount, refresh+bump triggers all forms
   return (
     <div className={styles.container}>
       <div className={styles.header}>
@@ -97,13 +89,16 @@ function DashboardInner() {
           </button>
         </div>
       </div>
-      <ScenarioSwitcher />
 
+      {/* SCENARIO SWITCHER at top */}
+      <ScenarioSwitcher onReset={() => { setRefresh((v) => v + 1); }} />
+
+      {/* All forms and projections get full refresh triggers */}
       <div className={styles.dashboardGrid}>
-        <BalanceForm onSave={bump} scenarioId={activeScenario} refresh={scenarioBump} />
-        <PaycheckForm onSave={bump} scenarioId={activeScenario} refresh={scenarioBump} />
-        <CardForm onSave={bump} scenarioId={activeScenario} refresh={scenarioBump} />
-        <LifeEventForm onSave={bump} scenarioId={activeScenario} refresh={scenarioBump} />
+        <BalanceForm onSave={bump} scenarioId={activeScenario} refresh={refresh + scenarioBump} />
+        <PaycheckForm onSave={bump} scenarioId={activeScenario} refresh={refresh + scenarioBump} />
+        <CardForm onSave={bump} scenarioId={activeScenario} refresh={refresh + scenarioBump} />
+        <LifeEventForm onSave={bump} scenarioId={activeScenario} refresh={refresh + scenarioBump} />
         <Projections
           key={activeScenario}
           refresh={refresh + scenarioBump}

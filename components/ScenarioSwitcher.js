@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabaseClient';
 import styles from '../styles/Dashboard.module.css';
 import { useScenario } from '../context/ScenarioContext';
 
-export default function ScenarioSwitcher() {
+export default function ScenarioSwitcher({ onReset }) {
   const { scenarios, setScenarios, activeScenario, setActiveScenario } = useScenario();
   const [newName, setNewName] = useState('');
   const [message, setMessage] = useState('');
@@ -44,15 +44,12 @@ export default function ScenarioSwitcher() {
     if (!orig) return;
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    // Duplicate scenario
     const { data: newScenarioRows } = await supabase.from('scenarios').insert({
       user_id: user.id,
       name: orig.name + ' (Copy)',
     }).select();
     const newScenario = newScenarioRows && newScenarioRows[0];
     if (!newScenario) return;
-
-    // Duplicate paychecks/cards/accounts/life_events for this scenario
     const copy = async (table, exclude = []) => {
       const { data } = await supabase.from(table).select('*').eq('user_id', user.id).eq('scenario_id', orig.id);
       if (data && data.length) {
@@ -82,15 +79,15 @@ export default function ScenarioSwitcher() {
       await supabase.from('credit_cards').delete().eq('user_id', user.id).eq('scenario_id', activeScenario);
       await supabase.from('life_events').delete().eq('user_id', user.id).eq('scenario_id', activeScenario);
       setMessage('Scenario reset.');
-      setTimeout(() => setMessage(''), 2000);
-      window.location.reload();
+      if (onReset) onReset(); // Extra bump for parent state
+      setTimeout(() => setMessage(''), 1500);
+      setTimeout(() => { window.location.reload(); }, 200); // This ensures UI/data wipe
     } catch (err) {
       setMessage('Error resetting: ' + err.message);
       setTimeout(() => setMessage(''), 4000);
     }
   };
 
-  // ---- UI Layout: all in one clean row
   return (
     <div className={styles.card} style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
       <label style={{ fontWeight: 500, marginBottom: 0, marginRight: 6 }}>Scenario:</label>
