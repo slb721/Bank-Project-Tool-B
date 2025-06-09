@@ -17,8 +17,8 @@ const typeOptions = [
   { value: 'income_loss', label: 'Job/Income Loss', icon: '⛔️' },
 ];
 
-// Use null for default scenario (matches original working setup)
 function normalizeScenarioId(scenarioId) {
+  // Use null for default
   return !scenarioId || scenarioId === '00000000-0000-0000-0000-000000000000' ? null : scenarioId;
 }
 
@@ -53,6 +53,10 @@ function typeIcon(type) {
 }
 
 export default function LifeEventForm({ onSave, scenarioId, refresh }) {
+  // Debug log scenarioId prop and normalized value
+  console.log('LIFEEVENT scenarioId prop:', scenarioId, typeof scenarioId);
+  console.log('LIFEEVENT normalized:', normalizeScenarioId(scenarioId));
+
   const [label, setLabel] = useState('');
   const [type, setType] = useState('income');
   const [amount, setAmount] = useState('');
@@ -92,6 +96,8 @@ export default function LifeEventForm({ onSave, scenarioId, refresh }) {
         query = query.eq('scenario_id', normScenarioId);
       }
       const { data, error } = await query.order('created_at', { ascending: false });
+      // Debug log fetch results
+      console.log('LIFEEVENT fetch results:', data, error);
       setEvents(error ? [] : (data || []));
     } finally {
       setLoading(false);
