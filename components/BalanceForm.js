@@ -1,4 +1,5 @@
 // components/BalanceForm.js
+
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import styles from '../styles/Dashboard.module.css';
@@ -13,21 +14,34 @@ export default function BalanceForm({ onSave, scenarioId }) {
     setLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return setBalance('');
+      if (!user) {
+        setBalance('');
+        setMessage('No user logged in.');
+        setLoading(false);
+        return;
+      }
 
       let query = supabase
         .from('accounts')
-        .select('current_balance')
+        .select('current_balance, id, user_id, scenario_id')
         .eq('user_id', user.id);
 
-      if (scenarioId) query = query.eq('scenario_id', scenarioId);
-      else query = query.is('scenario_id', null);
+      if (scenarioId) {
+        query = query.eq('scenario_id', scenarioId);
+      } else {
+        query = query.is('scenario_id', null);
+      }
 
       const { data, error } = await query.maybeSingle();
+      console.log('--- fetchBalance DEBUG ---');
+      console.log('Query scenarioId:', scenarioId);
+      console.log('Returned data:', data);
+      console.log('Error:', error);
 
-      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found
-        console.error('Balance fetch error:', error);
+      if (error && error.code !== 'PGRST116') { // 116 = no rows found
+        setMessage('Error fetching balance.');
         setBalance('');
+        setLoading(false);
         return;
       }
 
@@ -37,6 +51,7 @@ export default function BalanceForm({ onSave, scenarioId }) {
         setBalance('');
       }
     } catch (err) {
+      setMessage('Exception fetching balance.');
       console.error('Balance fetch exception:', err);
       setBalance('');
     }
@@ -50,6 +65,7 @@ export default function BalanceForm({ onSave, scenarioId }) {
 
   const handleSave = async () => {
     setLoading(true);
+    setMessage('');
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
@@ -62,6 +78,8 @@ export default function BalanceForm({ onSave, scenarioId }) {
         current_balance: +balance,
         scenario_id: scenarioId || null,
       };
+      console.log('--- handleSave DEBUG ---');
+      console.log('Upsert payload:', payload);
 
       const { error } = await supabase
         .from('accounts')
@@ -70,7 +88,7 @@ export default function BalanceForm({ onSave, scenarioId }) {
       if (!error) {
         setMessage('Balance saved successfully!');
         setTimeout(() => setMessage(''), 3000);
-        fetchBalance(); // Refresh displayed balance
+        await fetchBalance(); // Refresh displayed balance
         if (onSave) onSave();
       } else {
         setMessage('Error saving balance.');
