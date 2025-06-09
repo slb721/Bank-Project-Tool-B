@@ -5,7 +5,8 @@ import { supabase } from '../lib/supabaseClient';
 import styles from '../styles/Dashboard.module.css';
 
 function normalizeScenarioId(scenarioId) {
-  return !scenarioId || scenarioId === '' ? null : scenarioId;
+  // Use default UUID for default scenario, not null!
+  return !scenarioId || scenarioId === '' ? '00000000-0000-0000-0000-000000000000' : scenarioId;
 }
 
 export default function BalanceForm({ onSave, scenarioId }) {
@@ -13,7 +14,6 @@ export default function BalanceForm({ onSave, scenarioId }) {
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Fetch and update when scenario changes
   useEffect(() => {
     fetchBalance();
     // eslint-disable-next-line
@@ -35,20 +35,15 @@ export default function BalanceForm({ onSave, scenarioId }) {
         .eq('user_id', user.id);
 
       if (error) {
-        setMessage('Error fetching balance.');
+        setMessage('Error fetching balance: ' + (error.message || JSON.stringify(error)));
         setBalance('');
         setLoading(false);
         return;
       }
 
       const normScenarioId = normalizeScenarioId(scenarioId);
-      let rows;
-      if (normScenarioId) {
-        rows = data.filter(r => r.scenario_id === normScenarioId);
-      } else {
-        rows = data.filter(r => r.scenario_id === null);
-      }
-      let row = rows.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))[0];
+      let rows = data.filter(r => r.scenario_id === normScenarioId);
+      let row = rows.sort((a, b) => new Date(b.updated_at || 0) - new Date(a.updated_at || 0))[0];
 
       if (row && typeof row.current_balance !== 'undefined') {
         setBalance(row.current_balance);
@@ -89,10 +84,12 @@ export default function BalanceForm({ onSave, scenarioId }) {
         await fetchBalance();
         if (onSave) onSave();
       } else {
-        setMessage('Error saving balance.');
+        setMessage('Error saving balance: ' + (error.message || JSON.stringify(error)));
+        console.error('Error saving balance:', error);
       }
     } catch (err) {
-      setMessage('Unexpected error.');
+      setMessage('Unexpected error: ' + (err.message || JSON.stringify(err)));
+      console.error('Unexpected error saving balance:', err);
     }
     setLoading(false);
   };

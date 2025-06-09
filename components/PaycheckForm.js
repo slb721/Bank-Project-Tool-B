@@ -5,7 +5,8 @@ import { supabase } from '../lib/supabaseClient';
 import styles from '../styles/Dashboard.module.css';
 
 function normalizeScenarioId(scenarioId) {
-  return !scenarioId || scenarioId === '' ? null : scenarioId;
+  // Use default UUID for default scenario, not null!
+  return !scenarioId || scenarioId === '' ? '00000000-0000-0000-0000-000000000000' : scenarioId;
 }
 
 export default function PaycheckForm({ onSave, scenarioId }) {
@@ -45,12 +46,7 @@ export default function PaycheckForm({ onSave, scenarioId }) {
       }
 
       const normScenarioId = normalizeScenarioId(scenarioId);
-      let rows;
-      if (normScenarioId) {
-        rows = data.filter(r => r.scenario_id === normScenarioId);
-      } else {
-        rows = data.filter(r => r.scenario_id === null);
-      }
+      let rows = data.filter(r => r.scenario_id === normScenarioId);
       let row = rows.sort((a, b) => new Date(b.updated_at || 0) - new Date(a.updated_at || 0))[0];
 
       if (row) {
