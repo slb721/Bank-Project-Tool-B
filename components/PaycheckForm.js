@@ -12,6 +12,7 @@ export default function PaycheckForm({ onSave, scenarioId, refresh }) {
   const [amount, setAmount] = useState('');
   const [schedule, setSchedule] = useState('biweekly');
   const [nextDate, setNextDate] = useState('');
+  const [name, setName] = useState('');
   const [editId, setEditId] = useState(null);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
@@ -45,6 +46,7 @@ export default function PaycheckForm({ onSave, scenarioId, refresh }) {
     setAmount('');
     setSchedule('biweekly');
     setNextDate('');
+    setName('');
     setEditId(null);
   };
 
@@ -65,6 +67,7 @@ export default function PaycheckForm({ onSave, scenarioId, refresh }) {
         amount: +amount,
         schedule,
         next_date: nextDate,
+        name
       };
       let result;
       if (editId) {
@@ -92,6 +95,7 @@ export default function PaycheckForm({ onSave, scenarioId, refresh }) {
     setAmount(p.amount || '');
     setSchedule(p.schedule || 'biweekly');
     setNextDate(p.next_date ? p.next_date.slice(0, 10) : '');
+    setName(p.name || '');
   };
 
   const handleDelete = async (id) => {
@@ -112,6 +116,15 @@ export default function PaycheckForm({ onSave, scenarioId, refresh }) {
     <div className={styles.card}>
       <h2>Paychecks</h2>
       {message && <div className={styles.success}>{message}</div>}
+      <div className={styles.formGroup}>
+        <label>Name</label>
+        <input
+          type="text"
+          value={name}
+          onChange={e => setName(e.target.value)}
+          disabled={loading}
+        />
+      </div>
       <div className={styles.formGroup}>
         <label>Amount</label>
         <input
@@ -156,7 +169,7 @@ export default function PaycheckForm({ onSave, scenarioId, refresh }) {
           {paychecks.map(p => (
             <li key={p.id} style={{ marginBottom: 8, display: 'flex', alignItems: 'center', listStyle: 'none' }}>
               <span style={{ minWidth: 120, display: 'inline-block' }}>
-                ${p.amount} - {p.schedule} - Next: {p.next_date ? p.next_date.slice(0, 10) : ''}
+                {p.name ? p.name + ' - ' : ''}${p.amount} - {p.schedule} - Next: {p.next_date ? p.next_date.slice(0, 10) : ''}
               </span>
               <button
                 style={{
