@@ -73,32 +73,26 @@ export default function ScenarioSwitcher({ onReset }) {
   };
 
   const handleReset = async () => {
-    if (!window.confirm('This will permanently delete all paychecks, credit cards, balances, and life events for this scenario. Are you sure?')) return;
+    if (!window.confirm('This will permanently delete all data for this scenario. Continue?')) return;
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    try {
-      const normScenarioId = normalizeScenarioId(activeScenario);
-
-      const del = async (table) => {
-        if (normScenarioId === null) {
-          await supabase.from(table).delete().eq('user_id', user.id).is('scenario_id', null);
-        } else {
-          await supabase.from(table).delete().eq('user_id', user.id).eq('scenario_id', normScenarioId);
-        }
-      };
-      await del('accounts');
-      await del('paychecks');
-      await del('credit_cards');
-      await del('life_events');
-      setMessage('Scenario reset.');
-      if (onReset) onReset();
-      setTimeout(() => setMessage(''), 1500);
-      setTimeout(() => { window.location.reload(); }, 200);
-    } catch (err) {
-      setMessage('Error resetting: ' + err.message);
-      setTimeout(() => setMessage(''), 4000);
-    }
+    const normScenarioId = normalizeScenarioId(activeScenario);
+  
+    const del = async (table) => {
+      if (normScenarioId === null) {
+        await supabase.from(table).delete().eq('user_id', user.id).is('scenario_id', null);
+      } else {
+        await supabase.from(table).delete().eq('user_id', user.id).eq('scenario_id', normScenarioId);
+      }
+    };
+    await del('accounts');
+    await del('paychecks');
+    await del('credit_cards');
+    await del('life_events');
+    if (onReset) onReset();
+    window.location.reload();
   };
+  
 
   return (
     <div className={styles.card} style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
