@@ -35,7 +35,7 @@ export default function CardForm({ onSave, scenarioId }) {
       }
       const { data, error } = await supabase
         .from('credit_cards')
-        .select('id, user_id, next_due_date, next_due_amount, avg_future_amount, scenario_id, updated_at')
+        .select('id, user_id, next_due_date, next_due_amount, avg_future_amount, scenario_id')
         .eq('user_id', user.id);
 
         if (error) {

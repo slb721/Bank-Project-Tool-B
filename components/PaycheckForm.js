@@ -33,7 +33,7 @@ export default function PaycheckForm({ onSave, scenarioId }) {
       }
       const { data, error } = await supabase
         .from('paychecks')
-        .select('id, user_id, amount, schedule, next_date, scenario_id, updated_at')
+        .select('id, user_id, amount, schedule, next_date, scenario_id')
         .eq('user_id', user.id);
 
         if (error) {
