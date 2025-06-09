@@ -5,68 +5,62 @@ import { supabase } from '../lib/supabaseClient';
 import styles from '../styles/Dashboard.module.css';
 
 function normalizeScenarioId(scenarioId) {
-  // Use default UUID for default scenario, not null!
   return !scenarioId || scenarioId === '' ? '00000000-0000-0000-0000-000000000000' : scenarioId;
 }
 
-export default function CardForm({ onSave, scenarioId }) {
+export default function CardForm({ scenarioId }) {
+  const [name, setName] = useState('');
   const [nextDueDate, setNextDueDate] = useState('');
   const [nextDueAmount, setNextDueAmount] = useState('');
   const [avgFutureAmount, setAvgFutureAmount] = useState('');
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const [cards, setCards] = useState([]);
+  const [editId, setEditId] = useState(null);
+
   useEffect(() => {
-    fetchCard();
+    fetchCards();
     // eslint-disable-next-line
   }, [scenarioId]);
 
-  const fetchCard = async () => {
+  const fetchCards = async () => {
     setLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        setNextDueDate('');
-        setNextDueAmount('');
-        setAvgFutureAmount('');
+        setCards([]);
         setMessage('No user logged in.');
         setLoading(false);
         return;
       }
+      const normScenarioId = normalizeScenarioId(scenarioId);
       const { data, error } = await supabase
         .from('credit_cards')
-        .select('id, user_id, next_due_date, next_due_amount, avg_future_amount, scenario_id, updated_at')
-        .eq('user_id', user.id);
+        .select('id, user_id, name, next_due_date, next_due_amount, avg_future_amount, scenario_id, updated_at')
+        .eq('user_id', user.id)
+        .eq('scenario_id', normScenarioId)
+        .order('updated_at', { ascending: false });
 
       if (error) {
-        setMessage('Error fetching card: ' + (error.message || JSON.stringify(error)));
-        setNextDueDate('');
-        setNextDueAmount('');
-        setAvgFutureAmount('');
-        setLoading(false);
-        return;
-      }
-
-      const normScenarioId = normalizeScenarioId(scenarioId);
-      let rows = data.filter(r => r.scenario_id === normScenarioId);
-      let row = rows.sort((a, b) => new Date(b.updated_at || 0) - new Date(a.updated_at || 0))[0];
-
-      if (row) {
-        setNextDueDate(row.next_due_date ? row.next_due_date.slice(0, 10) : '');
-        setNextDueAmount(row.next_due_amount || '');
-        setAvgFutureAmount(row.avg_future_amount || '');
+        setMessage('Error fetching cards: ' + (error.message || JSON.stringify(error)));
+        setCards([]);
       } else {
-        setNextDueDate('');
-        setNextDueAmount('');
-        setAvgFutureAmount('');
+        setCards(data || []);
       }
     } catch (err) {
-      setMessage('Exception fetching card.');
-      setNextDueDate('');
-      setNextDueAmount('');
-      setAvgFutureAmount('');
+      setMessage('Exception fetching cards.');
+      setCards([]);
     }
     setLoading(false);
+  };
+
+  const resetForm = () => {
+    setEditId(null);
+    setName('');
+    setNextDueDate('');
+    setNextDueAmount('');
+    setAvgFutureAmount('');
   };
 
   const handleSave = async () => {
@@ -82,23 +76,30 @@ export default function CardForm({ onSave, scenarioId }) {
       const normScenarioId = normalizeScenarioId(scenarioId);
       const payload = {
         user_id: user.id,
+        name: name || 'Main Card',
         next_due_date: nextDueDate,
         next_due_amount: +nextDueAmount,
         avg_future_amount: +avgFutureAmount,
         scenario_id: normScenarioId,
-        name: 'Main Card' // default or actual card name
       };
-      
+      let result;
+      if (editId) {
+        result = await supabase
+          .from('credit_cards')
+          .update(payload)
+          .eq('id', editId);
+      } else {
+        result = await supabase
+          .from('credit_cards')
+          .insert(payload);
+      }
 
-      const { error } = await supabase
-        .from('credit_cards')
-        .upsert(payload, { onConflict: ['user_id', 'scenario_id'] });
-
+      const { error } = result;
       if (!error) {
         setMessage('Card saved successfully!');
         setTimeout(() => setMessage(''), 3000);
-        await fetchCard();
-        if (onSave) onSave();
+        resetForm();
+        await fetchCards();
       } else {
         setMessage('Error saving card: ' + (error.message || JSON.stringify(error)));
         console.error('Error saving card:', error);
@@ -110,11 +111,46 @@ export default function CardForm({ onSave, scenarioId }) {
     setLoading(false);
   };
 
+  const handleEdit = (row) => {
+    setEditId(row.id);
+    setName(row.name || '');
+    setNextDueDate(row.next_due_date ? row.next_due_date.slice(0, 10) : '');
+    setNextDueAmount(row.next_due_amount || '');
+    setAvgFutureAmount(row.avg_future_amount || '');
+  };
+
+  const handleDelete = async (id) => {
+    setLoading(true);
+    try {
+      const { error } = await supabase.from('credit_cards').delete().eq('id', id);
+      if (!error) {
+        setMessage('Deleted successfully');
+        setTimeout(() => setMessage(''), 3000);
+        resetForm();
+        await fetchCards();
+      } else {
+        setMessage('Error deleting: ' + (error.message || JSON.stringify(error)));
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className={styles.card}>
       <h2 className={styles.heading}>Credit Card</h2>
       {message && <div className={styles.success}>{message}</div>}
 
+      <div className={styles.formGroup}>
+        <label>Card Name</label>
+        <input
+          type="text"
+          value={name}
+          onChange={e => setName(e.target.value)}
+          disabled={loading}
+          placeholder="Card name"
+        />
+      </div>
       <div className={styles.formGroup}>
         <label>Next Due Date</label>
         <input
@@ -148,8 +184,31 @@ export default function CardForm({ onSave, scenarioId }) {
         onClick={handleSave}
         disabled={loading}
       >
-        {loading ? 'Saving...' : 'Save Card'}
+        {loading ? 'Saving...' : editId ? 'Update Card' : 'Add Card'}
       </button>
+      {editId && (
+        <button className={styles.button} onClick={resetForm} disabled={loading} style={{ marginLeft: 8 }}>
+          Cancel
+        </button>
+      )}
+
+      <hr style={{ margin: "24px 0" }} />
+
+      <h3 style={{ marginBottom: 8 }}>Your Credit Cards</h3>
+      {cards.length === 0 ? (
+        <div>No cards for this scenario.</div>
+      ) : (
+        <ul>
+          {cards.map((row) => (
+            <li key={row.id} style={{ marginBottom: 8 }}>
+              <b>{row.name || 'Card'}</b>: ${row.next_due_amount} (Next: {row.next_due_date ? row.next_due_date.slice(0, 10) : 'N/A'})
+              , Avg Future: ${row.avg_future_amount}
+              <button style={{ marginLeft: 8 }} onClick={() => handleEdit(row)} disabled={loading}>Edit</button>
+              <button style={{ marginLeft: 4 }} onClick={() => handleDelete(row.id)} disabled={loading}>Delete</button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
