@@ -111,10 +111,6 @@ export default function CardForm({ onSave, scenarioId, refresh }) {
     }
   };
 
-  // Debug - see what is being rendered
-  // Uncomment if you still see nothing:
-  // console.log("Cards:", cards);
-
   return (
     <div className={styles.card}>
       <h2>Credit Cards</h2>

@@ -30,11 +30,14 @@ function DashboardInner() {
           return;
         }
         setUser(user);
+      } catch (err) {
+        router.push('/login');
       } finally {
         setLoading(false);
       }
     };
     checkAuth();
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_OUT' || !session) {
         router.push('/login');
@@ -42,12 +45,22 @@ function DashboardInner() {
         setUser(session.user);
       }
     });
+
     return () => {
       subscription?.unsubscribe();
     };
   }, [router]);
 
   const bump = () => setRefresh((v) => v + 1);
+
+  const handleSignOut = async () => {
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) console.error('Sign out error:', error);
+    } catch (err) {
+      console.error('Unexpected sign out error:', err);
+    }
+  };
 
   if (loading) {
     return (
@@ -56,7 +69,10 @@ function DashboardInner() {
       </div>
     );
   }
-  if (!user) return null;
+
+  if (!user) {
+    return null;
+  }
 
   return (
     <div className={styles.container}>
@@ -64,20 +80,18 @@ function DashboardInner() {
         <h2>Your Dashboard</h2>
         <div className={styles.userInfo}>
           <span>Welcome, {user.email}</span>
-          <button onClick={async () => { await supabase.auth.signOut(); }} className={styles.signOutButton}>
+          <button onClick={handleSignOut} className={styles.signOutButton}>
             Sign Out
           </button>
         </div>
       </div>
-
-      <ScenarioSwitcher onReset={bump} />
-
+      <ScenarioSwitcher onChange={bump} /> {/* Now triggers refresh on delete/add */}
       <div className={styles.dashboardGrid}>
-        <BalanceForm onSave={bump} scenarioId={activeScenario} refresh={refresh} />
+        <BalanceForm onSave={bump} scenarioId={activeScenario} />
         <PaycheckForm onSave={bump} scenarioId={activeScenario} refresh={refresh} />
         <CardForm onSave={bump} scenarioId={activeScenario} refresh={refresh} />
         <LifeEventForm onSave={bump} scenarioId={activeScenario} refresh={refresh} />
-        <Projections key={activeScenario} refresh={refresh} className={styles.chartWide} scenarioId={activeScenario} />
+        <Projections refresh={refresh} scenarioId={activeScenario} className={styles.chartWide} />
       </div>
     </div>
   );

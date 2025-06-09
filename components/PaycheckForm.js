@@ -8,10 +8,10 @@ function normalizeScenarioId(scenarioId) {
 
 export default function PaycheckForm({ onSave, scenarioId, refresh }) {
   const [paychecks, setPaychecks] = useState([]);
+  const [name, setName] = useState('');
   const [amount, setAmount] = useState('');
   const [schedule, setSchedule] = useState('biweekly');
   const [nextDate, setNextDate] = useState('');
-  const [name, setName] = useState('');
   const [editId, setEditId] = useState(null);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
@@ -42,10 +42,10 @@ export default function PaycheckForm({ onSave, scenarioId, refresh }) {
   };
 
   const resetForm = () => {
+    setName('');
     setAmount('');
     setSchedule('biweekly');
     setNextDate('');
-    setName('');
     setEditId(null);
   };
 
@@ -63,10 +63,10 @@ export default function PaycheckForm({ onSave, scenarioId, refresh }) {
       const payload = {
         user_id: user.id,
         scenario_id: normScenarioId,
+        name,
         amount: +amount,
         schedule,
         next_date: nextDate,
-        name
       };
       let result;
       if (editId) {
@@ -91,10 +91,10 @@ export default function PaycheckForm({ onSave, scenarioId, refresh }) {
 
   const handleEdit = (p) => {
     setEditId(p.id);
+    setName(p.name || '');
     setAmount(p.amount || '');
     setSchedule(p.schedule || 'biweekly');
     setNextDate(p.next_date ? p.next_date.slice(0, 10) : '');
-    setName(p.name || '');
   };
 
   const handleDelete = async (id) => {
@@ -110,10 +110,6 @@ export default function PaycheckForm({ onSave, scenarioId, refresh }) {
       setLoading(false);
     }
   };
-
-  // Debug - see what is being rendered
-  // Uncomment if you still see nothing:
-  // console.log("Paychecks:", paychecks);
 
   return (
     <div className={styles.card}>

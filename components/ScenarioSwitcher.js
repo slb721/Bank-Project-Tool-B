@@ -1,123 +1,94 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import styles from '../styles/Dashboard.module.css';
 import { useScenario } from '../context/ScenarioContext';
+import styles from '../styles/Dashboard.module.css';
 
-function normalizeScenarioId(scenarioId) {
-  return !scenarioId || scenarioId === '00000000-0000-0000-0000-000000000000' ? null : scenarioId;
-}
-
-export default function ScenarioSwitcher({ onReset }) {
-  const { scenarios, setScenarios, activeScenario, setActiveScenario } = useScenario();
-  const [newName, setNewName] = useState('');
-  const [message, setMessage] = useState('');
+export default function ScenarioSwitcher({ onChange }) {
+  const { activeScenario, setActiveScenario } = useScenario();
+  const [scenarios, setScenarios] = useState([]);
+  const [newScenario, setNewScenario] = useState('');
+  const [duplicating, setDuplicating] = useState(false);
 
   useEffect(() => { fetchScenarios(); }, []);
 
   const fetchScenarios = async () => {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    const { data } = await supabase.from('scenarios').select('*').eq('user_id', user.id).order('created_at');
+    if (!user) return setScenarios([]);
+    const { data, error } = await supabase.from('scenarios').select('*').eq('user_id', user.id).order('created_at');
     setScenarios(data || []);
   };
 
-  const handleSelect = (e) => setActiveScenario(e.target.value);
+  const handleSelect = (e) => {
+    setActiveScenario(e.target.value || null);
+    if (onChange) onChange();
+  };
 
   const handleCreate = async () => {
+    if (!newScenario.trim()) return;
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user || !newName.trim()) return;
+    if (!user) return;
     await supabase.from('scenarios').insert({
       user_id: user.id,
-      name: newName.trim(),
+      name: newScenario.trim(),
     });
-    setNewName('');
-    fetchScenarios();
+    setNewScenario('');
+    await fetchScenarios();
+    if (onChange) onChange();
   };
 
   const handleDuplicate = async () => {
-    const orig = scenarios.find(s => s.id === activeScenario);
-    if (!orig) return;
+    setDuplicating(true);
+    const original = scenarios.find(s => s.id === activeScenario);
+    if (!original) { setDuplicating(false); return; }
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    const { data: newScenarioRows } = await supabase.from('scenarios').insert({
+    if (!user) { setDuplicating(false); return; }
+    const { data, error } = await supabase.from('scenarios').insert({
       user_id: user.id,
-      name: orig.name + ' (Copy)',
+      name: original.name + ' (Copy)'
     }).select();
-    const newScenario = newScenarioRows && newScenarioRows[0];
-    if (!newScenario) return;
-    const copy = async (table, exclude = []) => {
-      const { data } = await supabase.from(table).select('*').eq('user_id', user.id).eq('scenario_id', orig.id);
-      if (data && data.length) {
-        await Promise.all(data.map(row => {
-          const { id, ...rest } = row;
-          const filtered = Object.fromEntries(Object.entries(rest).filter(([k]) => !exclude.includes(k)));
-          return supabase.from(table).insert({ ...filtered, scenario_id: newScenario.id });
-        }));
-      }
-    };
-    await copy('accounts', ['updated_at', 'created_at']);
-    await copy('paychecks', ['updated_at', 'created_at']);
-    await copy('credit_cards', ['updated_at', 'created_at']);
-    await copy('life_events', ['updated_at', 'created_at']);
-    fetchScenarios();
-    setActiveScenario(newScenario.id);
+    if (data && data[0]) {
+      // Optionally duplicate related data here (not implemented)
+      await fetchScenarios();
+      setActiveScenario(data[0].id);
+      if (onChange) onChange();
+    }
+    setDuplicating(false);
   };
 
-  const handleReset = async () => {
-    if (!window.confirm('This will permanently delete all paychecks, credit cards, balances, and life events for this scenario. Are you sure?')) return;
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    const normScenarioId = normalizeScenarioId(activeScenario);
-
-    const del = async (table) => {
-      if (normScenarioId === null) {
-        await supabase.from(table).delete().eq('user_id', user.id).is('scenario_id', null);
-      } else {
-        await supabase.from(table).delete().eq('user_id', user.id).eq('scenario_id', normScenarioId);
-      }
-    };
-    await del('accounts');
-    await del('paychecks');
-    await del('credit_cards');
-    await del('life_events');
-    setMessage('Scenario reset.');
-    if (onReset) onReset();
-    setTimeout(() => setMessage(''), 1200);
-    setTimeout(() => { window.location.reload(); }, 200);
+  const handleDelete = async (id) => {
+    if (!window.confirm('Delete this scenario and all related data?')) return;
+    await supabase.from('scenarios').delete().eq('id', id);
+    await fetchScenarios();
+    setActiveScenario(null);
+    if (onChange) onChange();
   };
 
   return (
-    <div className={styles.card} style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-      <label style={{ fontWeight: 500, marginBottom: 0, marginRight: 6 }}>Scenario:</label>
-      <select value={activeScenario} onChange={handleSelect} className={styles.input} style={{ minWidth: 140 }}>
-        {scenarios.map(s => (
-          <option key={s.id} value={s.id}>{s.name}</option>
-        ))}
-      </select>
-      <input
-        className={styles.input}
-        placeholder="New scenario name"
-        value={newName}
-        onChange={e => setNewName(e.target.value)}
-        style={{ minWidth: 120, marginLeft: 6 }}
-      />
-      <button className={styles.button} style={{ marginLeft: 0 }} onClick={handleCreate}>+ New</button>
-      <button className={styles.button} onClick={handleDuplicate}>Duplicate</button>
-      <button
-        className={styles.button}
-        style={{
-          background: '#fff7f7',
-          color: '#c0392b',
-          border: '1px solid #c0392b',
-          fontWeight: 600,
-          padding: '2px 12px',
-          fontSize: 13
-        }}
-        onClick={handleReset}
-      >
-        Reset Scenario
-      </button>
-      {message && <span style={{ color: '#38a169', fontSize: 13, marginLeft: 8 }}>{message}</span>}
+    <div className={styles.card} style={{ marginBottom: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+        <label><b>Scenario:</b></label>
+        <select value={activeScenario || ''} onChange={handleSelect} style={{ minWidth: 200 }}>
+          <option value="">Default</option>
+          {scenarios.map(s =>
+            <option key={s.id} value={s.id}>{s.name}</option>
+          )}
+        </select>
+        <input
+          type="text"
+          value={newScenario}
+          placeholder="New scenario name"
+          onChange={e => setNewScenario(e.target.value)}
+          style={{ minWidth: 160 }}
+        />
+        <button onClick={handleCreate} disabled={!newScenario.trim()}>+ New</button>
+        <button onClick={handleDuplicate} disabled={!activeScenario || duplicating}>Duplicate</button>
+        {activeScenario && (
+          <button
+            onClick={() => handleDelete(activeScenario)}
+            style={{ background: '#fff7f7', color: '#c0392b', border: '1px solid #c0392b', borderRadius: 5 }}
+          >Delete</button>
+        )}
+      </div>
     </div>
   );
 }

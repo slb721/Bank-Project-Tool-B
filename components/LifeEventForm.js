@@ -1,138 +1,58 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import styles from '../styles/Dashboard.module.css';
 
-const recurrenceOptions = [
-  { value: 'one_time', label: 'One-Time' },
-  { value: 'weekly', label: 'Weekly' },
-  { value: 'biweekly', label: 'Biweekly' },
-  { value: 'monthly', label: 'Monthly' },
-];
-
-const typeOptions = [
-  { value: 'income', label: 'Income Increase', icon: '⬆️' },
-  { value: 'expense', label: 'Expense Increase', icon: '⬇️' },
-  { value: 'one_time_inflow', label: 'One-Time Inflow', icon: '💰' },
-  { value: 'one_time_outflow', label: 'One-Time Outflow', icon: '💸' },
-  { value: 'income_loss', label: 'Job/Income Loss', icon: '⛔️' },
-];
-
 function normalizeScenarioId(scenarioId) {
-  // Use null for default
   return !scenarioId || scenarioId === '00000000-0000-0000-0000-000000000000' ? null : scenarioId;
 }
 
-function getAmountHelpText(type, recurrence, paychecks, selectedLossPaycheckId) {
-  switch (type) {
-    case 'income':
-      return `Enter the ${recurrence} INCREASE in income (positive number).`;
-    case 'expense':
-      return `Enter the ${recurrence} INCREASE in expenses (positive number).`;
-    case 'one_time_inflow':
-      return 'Enter the amount received ONCE (positive number).';
-    case 'one_time_outflow':
-      return 'Enter the amount spent ONCE (positive number).';
-    case 'income_loss':
-      if (paychecks.length === 0) return 'No income streams found for this scenario.';
-      if (!selectedLossPaycheckId) return 'Select which income stream will be lost and pick the start date of loss.';
-      const paycheck = paychecks.find(p => p.id === selectedLossPaycheckId);
-      return `All income from "${paycheck ? paycheck.name || `$${paycheck.amount}` : 'Selected Paycheck'}" will be removed after the start date. If you set an end date, it will resume after that period.`;
-    default:
-      return '';
-  }
-}
-
-function typeLabel(type) {
-  const opt = typeOptions.find(o => o.value === type);
-  return opt ? opt.label : type;
-}
-
-function typeIcon(type) {
-  const opt = typeOptions.find(o => o.value === type);
-  return opt ? opt.icon : '';
-}
-
-export default function LifeEventForm({ onSave, scenarioId, refresh }) {
-  // Debug log scenarioId prop and normalized value
-  console.log('LIFEEVENT scenarioId prop:', scenarioId, typeof scenarioId);
-  console.log('LIFEEVENT normalized:', normalizeScenarioId(scenarioId));
-
+export default function LifeEventForm({ scenarioId, refresh, onSave }) {
+  const [events, setEvents] = useState([]);
   const [label, setLabel] = useState('');
-  const [type, setType] = useState('income');
+  const [type, setType] = useState('one_time_outflow');
   const [amount, setAmount] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [recurrence, setRecurrence] = useState('one_time');
+  const [recurrence, setRecurrence] = useState('');
+  const [relatedPaycheckId, setRelatedPaycheckId] = useState('');
+  const [editId, setEditId] = useState(null);
+  const [paychecks, setPaychecks] = useState([]);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const [events, setEvents] = useState([]);
-  const [editId, setEditId] = useState(null);
-
-  // For job loss event
-  const [paychecks, setPaychecks] = useState([]);
-  const [lossPaycheckId, setLossPaycheckId] = useState('');
-
-  useEffect(() => {
-    fetchEvents();
-    fetchPaychecks();
-    // eslint-disable-next-line
-  }, [scenarioId, refresh]);
+  useEffect(() => { fetchEvents(); fetchPaychecks(); }, [scenarioId, refresh]);
 
   const fetchEvents = async () => {
-    setLoading(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        setEvents([]);
-        setLoading(false);
-        return;
-      }
-      const normScenarioId = normalizeScenarioId(scenarioId);
-      let query = supabase.from('life_events').select('*').eq('user_id', user.id);
-      if (normScenarioId === null) {
-        query = query.is('scenario_id', null);
-      } else {
-        query = query.eq('scenario_id', normScenarioId);
-      }
-      const { data, error } = await query.order('created_at', { ascending: false });
-      // Debug log fetch results
-      console.log('LIFEEVENT fetch results:', data, error);
-      setEvents(error ? [] : (data || []));
-    } finally {
-      setLoading(false);
-    }
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return setEvents([]);
+    const normScenarioId = normalizeScenarioId(scenarioId);
+    let query = supabase.from('life_events').select('*').eq('user_id', user.id);
+    if (normScenarioId === null) query = query.is('scenario_id', null);
+    else query = query.eq('scenario_id', normScenarioId);
+    const { data, error } = await query.order('created_at', { ascending: false });
+    setEvents(error ? [] : (data || []));
   };
 
   const fetchPaychecks = async () => {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      setPaychecks([]);
-      return;
-    }
+    if (!user) return setPaychecks([]);
     const normScenarioId = normalizeScenarioId(scenarioId);
-    let query = supabase
-      .from('paychecks')
-      .select('id, amount, schedule, next_date, name, scenario_id, created_at')
-      .eq('user_id', user.id);
-    if (normScenarioId === null) {
-      query = query.is('scenario_id', null);
-    } else {
-      query = query.eq('scenario_id', normScenarioId);
-    }
+    let query = supabase.from('paychecks').select('*').eq('user_id', user.id);
+    if (normScenarioId === null) query = query.is('scenario_id', null);
+    else query = query.eq('scenario_id', normScenarioId);
     const { data, error } = await query.order('created_at', { ascending: false });
     setPaychecks(error ? [] : (data || []));
   };
 
   const resetForm = () => {
-    setEditId(null);
     setLabel('');
-    setType('income');
+    setType('one_time_outflow');
     setAmount('');
     setStartDate('');
     setEndDate('');
-    setRecurrence('one_time');
-    setLossPaycheckId('');
+    setRecurrence('');
+    setRelatedPaycheckId('');
+    setEditId(null);
   };
 
   const handleSave = async () => {
@@ -146,39 +66,29 @@ export default function LifeEventForm({ onSave, scenarioId, refresh }) {
         return;
       }
       const normScenarioId = normalizeScenarioId(scenarioId);
-
-      // For job loss, encode the selected paycheck id
-      let payload = {
+      const payload = {
         user_id: user.id,
         scenario_id: normScenarioId,
+        label,
         type,
-        label: label || (type === 'income_loss' ? 'Job Loss' : '(No Label)'),
-        amount: type === 'income_loss' ? 0 : +amount,
+        amount: +amount,
         start_date: startDate,
-        end_date: recurrence === 'one_time' || !endDate ? null : endDate,
-        recurrence: type === 'income_loss'
-          ? paychecks.find(p => p.id === lossPaycheckId)?.schedule || 'monthly'
-          : recurrence,
-        related_paycheck_id: type === 'income_loss' ? lossPaycheckId : null,
+        end_date: endDate || null,
+        recurrence,
+        related_paycheck_id: relatedPaycheckId || null,
       };
-
       let result;
       if (editId) {
-        result = await supabase
-          .from('life_events')
-          .update(payload)
-          .eq('id', editId);
+        result = await supabase.from('life_events').update(payload).eq('id', editId);
       } else {
-        result = await supabase
-          .from('life_events')
-          .insert(payload);
+        result = await supabase.from('life_events').insert(payload);
       }
       const { error } = result;
       if (!error) {
-        setMessage('Life event saved!');
-        setTimeout(() => setMessage(''), 2000);
+        setMessage('Event saved!');
+        setTimeout(() => setMessage(''), 1500);
         resetForm();
-        await fetchEvents();
+        fetchEvents();
         if (onSave) onSave();
       } else {
         setMessage('Error saving event: ' + (error.message || JSON.stringify(error)));
@@ -188,30 +98,26 @@ export default function LifeEventForm({ onSave, scenarioId, refresh }) {
     }
   };
 
-  const handleEdit = (event) => {
-    setEditId(event.id);
-    setLabel(event.label || '');
-    setType(event.type);
-    setAmount(event.amount || '');
-    setStartDate(event.start_date ? event.start_date.slice(0, 10) : '');
-    setEndDate(event.end_date ? event.end_date.slice(0, 10) : '');
-    setRecurrence(event.recurrence);
-    setLossPaycheckId(event.related_paycheck_id || '');
+  const handleEdit = (e) => {
+    setEditId(e.id);
+    setLabel(e.label || '');
+    setType(e.type || 'one_time_outflow');
+    setAmount(e.amount || '');
+    setStartDate(e.start_date ? e.start_date.slice(0, 10) : '');
+    setEndDate(e.end_date ? e.end_date.slice(0, 10) : '');
+    setRecurrence(e.recurrence || '');
+    setRelatedPaycheckId(e.related_paycheck_id || '');
   };
 
   const handleDelete = async (id) => {
     setLoading(true);
     try {
-      const { error } = await supabase.from('life_events').delete().eq('id', id);
-      if (!error) {
-        setMessage('Deleted successfully');
-        setTimeout(() => setMessage(''), 2000);
-        resetForm();
-        await fetchEvents();
-        if (onSave) onSave();
-      } else {
-        setMessage('Error deleting: ' + (error.message || JSON.stringify(error)));
-      }
+      await supabase.from('life_events').delete().eq('id', id);
+      setMessage('Deleted.');
+      setTimeout(() => setMessage(''), 1000);
+      resetForm();
+      fetchEvents();
+      if (onSave) onSave();
     } finally {
       setLoading(false);
     }
@@ -219,98 +125,35 @@ export default function LifeEventForm({ onSave, scenarioId, refresh }) {
 
   return (
     <div className={styles.card}>
-      <h2 className={styles.heading}>Life Events</h2>
+      <h2>Life Events</h2>
       {message && <div className={styles.success}>{message}</div>}
-
       <div className={styles.formGroup}>
-        <label>Event Label</label>
+        <label>Label</label>
         <input
           type="text"
           value={label}
           onChange={e => setLabel(e.target.value)}
-          placeholder="E.g., New job, parental leave, tax refund, etc."
           disabled={loading}
         />
       </div>
       <div className={styles.formGroup}>
         <label>Type</label>
-        <select
-          value={type}
-          onChange={e => {
-            setType(e.target.value);
-            if (e.target.value === 'income_loss') {
-              setAmount('');
-              setLossPaycheckId('');
-              setRecurrence('');
-            }
-          }}
-          disabled={loading}
-        >
-          {typeOptions.map(opt => (
-            <option key={opt.value} value={opt.value}>{opt.label}</option>
-          ))}
+        <select value={type} onChange={e => setType(e.target.value)} disabled={loading}>
+          <option value="one_time_outflow">One-time Outflow</option>
+          <option value="recurring_expense_increase">Recurring Expense Increase</option>
+          <option value="recurring_income_loss">Recurring Income Loss</option>
+          <option value="job_loss">Job Loss (Pick income stream)</option>
         </select>
       </div>
-
-      {/* For job loss: income stream dropdown, recurrence auto-lock */}
-      {type === 'income_loss' ? (
-        <>
-          <div className={styles.formGroup}>
-            <label>Select Income Stream</label>
-            <select
-              value={lossPaycheckId}
-              onChange={e => {
-                setLossPaycheckId(e.target.value);
-                const p = paychecks.find(p => p.id === e.target.value);
-                if (p) setRecurrence(p.schedule);
-              }}
-              disabled={loading || paychecks.length === 0}
-            >
-              <option value="">-- Select --</option>
-              {paychecks.map(pc => (
-                <option key={pc.id} value={pc.id}>
-                  {pc.name ? pc.name : ''} {pc.amount ? `$${pc.amount}` : ''} {pc.schedule} (Next: {pc.next_date ? pc.next_date.slice(0, 10) : 'N/A'})
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className={styles.formGroup}>
-            <label>Recurrence</label>
-            <input
-              type="text"
-              value={paychecks.find(p => p.id === lossPaycheckId)?.schedule || ''}
-              readOnly
-              style={{ background: '#eee', color: '#666', cursor: 'not-allowed' }}
-            />
-          </div>
-        </>
-      ) : (
-        <>
-          <div className={styles.formGroup}>
-            <label>Amount</label>
-            <input
-              type="number"
-              value={amount}
-              onChange={e => setAmount(e.target.value)}
-              disabled={loading}
-              placeholder="Positive number"
-            />
-          </div>
-          <div className={styles.formGroup}>
-            <label>Recurrence</label>
-            <select
-              value={recurrence}
-              onChange={e => setRecurrence(e.target.value)}
-              disabled={loading}
-            >
-              {recurrenceOptions.map(opt => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
-          </div>
-        </>
-      )}
-
+      <div className={styles.formGroup}>
+        <label>Amount</label>
+        <input
+          type="number"
+          value={amount}
+          onChange={e => setAmount(e.target.value)}
+          disabled={loading}
+        />
+      </div>
       <div className={styles.formGroup}>
         <label>Start Date</label>
         <input
@@ -320,110 +163,106 @@ export default function LifeEventForm({ onSave, scenarioId, refresh }) {
           disabled={loading}
         />
       </div>
-      {(type !== 'one_time_inflow' && type !== 'one_time_outflow') && (
+      <div className={styles.formGroup}>
+        <label>End Date (if any)</label>
+        <input
+          type="date"
+          value={endDate}
+          onChange={e => setEndDate(e.target.value)}
+          disabled={loading}
+        />
+      </div>
+      {(type === 'recurring_expense_increase' || type === 'recurring_income_loss') && (
         <div className={styles.formGroup}>
-          <label>
-            End Date{' '}
-            <span style={{ color: '#999', fontWeight: 'normal' }}>
-              (leave blank for permanent change)
-            </span>
-          </label>
-          <input
-            type="date"
-            value={endDate}
-            onChange={e => setEndDate(e.target.value)}
-            disabled={loading}
-          />
+          <label>Recurrence</label>
+          <select value={recurrence} onChange={e => setRecurrence(e.target.value)} disabled={loading}>
+            <option value="">Select</option>
+            <option value="weekly">Weekly</option>
+            <option value="biweekly">Biweekly</option>
+            <option value="bimonthly">Bimonthly</option>
+            <option value="monthly">Monthly</option>
+          </select>
         </div>
       )}
-
-      <div style={{ color: '#555', margin: '8px 0', fontSize: 13 }}>
-        {getAmountHelpText(type, recurrence, paychecks, lossPaycheckId)}
-      </div>
-      <button
-        className={styles.button}
-        onClick={handleSave}
-        disabled={
-          loading ||
-          (type === 'income_loss' && !lossPaycheckId)
-        }
-      >
-        {loading ? 'Saving...' : editId ? 'Update Event' : 'Add Event'}
+      {type === 'job_loss' && (
+        <div className={styles.formGroup}>
+          <label>Select income stream (paycheck):</label>
+          <select
+            value={relatedPaycheckId}
+            onChange={e => setRelatedPaycheckId(e.target.value)}
+            disabled={loading}
+          >
+            <option value="">Select paycheck</option>
+            {paychecks.map(p => (
+              <option key={p.id} value={p.id}>
+                {p.name || `Paycheck ${p.id.slice(0, 4)}`} (${p.amount} {p.schedule})
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+      <button className={styles.button} onClick={handleSave} disabled={loading}>
+        {loading ? 'Saving...' : editId ? 'Update' : 'Add'}
       </button>
       {editId && (
-        <button className={styles.button} onClick={resetForm} disabled={loading} style={{ marginLeft: 8 }}>
+        <button className={styles.button} onClick={resetForm} style={{ marginLeft: 8 }}>
           Cancel
         </button>
       )}
-
-      <hr style={{ margin: "24px 0" }} />
-
-      <h3 style={{ marginBottom: 8 }}>Events for this Scenario</h3>
-      {events.length === 0 ? (
-        <div>No events yet.</div>
-      ) : (
-        <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
-          <thead>
-            <tr style={{ borderBottom: '1px solid #ccc' }}>
-              <th align="left">Type</th>
-              <th align="left">Label</th>
-              <th align="right">Amount</th>
-              <th align="left">Start</th>
-              <th align="left">End</th>
-              <th align="left">Recurrence</th>
-              <th align="center">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {events.map((row) => (
-              <tr key={row.id} style={{ borderBottom: '1px solid #eee', verticalAlign: 'middle' }}>
-                <td>{typeIcon(row.type)} {typeLabel(row.type)}</td>
-                <td>{row.label}</td>
-                <td align="right" style={{ color: (row.type === 'income' || row.type === 'one_time_inflow') ? '#059669' : '#b91c1c', fontWeight: 600 }}>
-                  {(row.type === 'income' || row.type === 'one_time_inflow') ? '+' : row.type === 'income_loss' ? '—' : '-'}{row.amount}
-                </td>
-                <td>{row.start_date ? row.start_date.slice(0, 10) : ''}</td>
-                <td>{row.end_date ? row.end_date.slice(0, 10) : (row.recurrence === 'one_time' ? '—' : 'No end')}</td>
-                <td>{row.recurrence && row.recurrence.replace('_', ' ')}</td>
-                <td style={{ textAlign: 'center' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'center', justifyContent: 'center' }}>
-                    <button
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        color: '#333',
-                        fontSize: 16,
-                        cursor: 'pointer',
-                        padding: 0,
-                        margin: 0,
-                        lineHeight: 1
-                      }}
-                      title="Edit"
-                      onClick={() => handleEdit(row)}
-                      disabled={loading}
-                    >✏️</button>
-                    <button
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        color: '#c0392b',
-                        fontSize: 16,
-                        cursor: 'pointer',
-                        padding: 0,
-                        margin: 0,
-                        lineHeight: 1
-                      }}
-                      title="Delete"
-                      onClick={() => handleDelete(row.id)}
-                      disabled={loading}
-                    >🗑️</button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+      <hr style={{ margin: "16px 0" }} />
+      <h3>Saved Events</h3>
+      <ul style={{ paddingLeft: 0 }}>
+        {events.length === 0 ? (
+          <div>No events saved.</div>
+        ) : (
+          events.map((e) => (
+            <li key={e.id} style={{ marginBottom: 8, display: 'flex', alignItems: 'center', listStyle: 'none' }}>
+              <span>
+                <b>{e.label}</b> — {e.type.replace(/_/g, ' ')} — ${e.amount} — {e.start_date?.slice(0, 10)}
+                {e.end_date && ` to ${e.end_date.slice(0, 10)}`}
+                {e.recurrence && ` (${e.recurrence})`}
+                {e.related_paycheck_id && (
+                  <>
+                    {' '}for{' '}
+                    {
+                      (paychecks.find(p => p.id === e.related_paycheck_id)?.name) ||
+                      `Paycheck ${e.related_paycheck_id.slice(0, 4)}`
+                    }
+                  </>
+                )}
+              </span>
+              <button
+                style={{
+                  marginLeft: 12,
+                  padding: '2px 10px',
+                  fontSize: 13,
+                  background: '#e3edfc',
+                  color: '#2466a7',
+                  border: '1px solid #bdd7f6',
+                  borderRadius: 5,
+                  cursor: 'pointer',
+                  marginRight: 6,
+                }}
+                onClick={() => handleEdit(e)}
+                disabled={loading}
+              >Edit</button>
+              <button
+                style={{
+                  padding: '2px 10px',
+                  fontSize: 13,
+                  background: '#fff7f7',
+                  color: '#c0392b',
+                  border: '1px solid #c0392b',
+                  borderRadius: 5,
+                  cursor: 'pointer'
+                }}
+                onClick={() => handleDelete(e.id)}
+                disabled={loading}
+              >Delete</button>
+            </li>
+          ))
+        )}
+      </ul>
     </div>
   );
 }
