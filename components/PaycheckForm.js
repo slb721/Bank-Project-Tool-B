@@ -36,12 +36,24 @@ export default function PaycheckForm({ onSave, scenarioId }) {
         .select('id, user_id, amount, schedule, next_date, scenario_id, updated_at')
         .eq('user_id', user.id);
 
-      if (error) {
-        setMessage('Error fetching paycheck.');
-        setAmount('');
-        setLoading(false);
-        return;
-      }
+        if (error) {
+          setMessage('Error fetching paycheck: ' + (error.message || ''));
+          setAmount('');
+          setSchedule('biweekly');
+          setNextDate('');
+          setLoading(false);
+          return;
+        }
+        
+        if (!data || data.length === 0) {
+          setMessage('No paycheck found for this scenario.');
+          setAmount('');
+          setSchedule('biweekly');
+          setNextDate('');
+          setLoading(false);
+          return;
+        }
+        
 
       const normScenarioId = normalizeScenarioId(scenarioId);
       let rows;

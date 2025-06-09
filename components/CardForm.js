@@ -38,14 +38,24 @@ export default function CardForm({ onSave, scenarioId }) {
         .select('id, user_id, next_due_date, next_due_amount, avg_future_amount, scenario_id, updated_at')
         .eq('user_id', user.id);
 
-      if (error) {
-        setMessage('Error fetching card.');
-        setNextDueDate('');
-        setNextDueAmount('');
-        setAvgFutureAmount('');
-        setLoading(false);
-        return;
-      }
+        if (error) {
+          setMessage('Error fetching card: ' + (error.message || ''));
+          setNextDueDate('');
+          setNextDueAmount('');
+          setAvgFutureAmount('');
+          setLoading(false);
+          return;
+        }
+        
+        if (!data || data.length === 0) {
+          setMessage('No card found for this scenario.');
+          setNextDueDate('');
+          setNextDueAmount('');
+          setAvgFutureAmount('');
+          setLoading(false);
+          return;
+        }
+        
 
       const normScenarioId = normalizeScenarioId(scenarioId);
       let rows;
