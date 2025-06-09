@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabaseClient';
 import styles from '../styles/Dashboard.module.css';
 
 function normalizeScenarioId(scenarioId) {
-  return !scenarioId ? '00000000-0000-0000-0000-000000000000' : scenarioId;
+  return !scenarioId || scenarioId === '00000000-0000-0000-0000-000000000000' ? null : scenarioId;
 }
 
 export default function CardForm({ onSave, scenarioId, refresh }) {
@@ -28,7 +28,12 @@ export default function CardForm({ onSave, scenarioId, refresh }) {
         return;
       }
       const normScenarioId = normalizeScenarioId(scenarioId);
-      let query = supabase.from('credit_cards').select('*').eq('user_id', user.id).eq('scenario_id', normScenarioId);
+      let query = supabase.from('credit_cards').select('*').eq('user_id', user.id);
+      if (normScenarioId === null) {
+        query = query.is('scenario_id', null);
+      } else {
+        query = query.eq('scenario_id', normScenarioId);
+      }
       const { data, error } = await query.order('created_at', { ascending: false });
       setCards(error ? [] : (data || []));
     } finally {
