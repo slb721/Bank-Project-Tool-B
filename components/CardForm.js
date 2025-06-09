@@ -86,7 +86,9 @@ export default function CardForm({ onSave, scenarioId }) {
         next_due_amount: +nextDueAmount,
         avg_future_amount: +avgFutureAmount,
         scenario_id: normScenarioId,
+        name: 'Main Card' // default or actual card name
       };
+      
 
       const { error } = await supabase
         .from('credit_cards')
