@@ -17,8 +17,6 @@ function DashboardInner() {
   const router = useRouter();
   const { activeScenario } = useScenario();
 
- 
-
   useEffect(() => {
     const checkAuth = async () => {
       try {
@@ -61,15 +59,19 @@ function DashboardInner() {
   if (!user) return null;
 
   return (
-
-    <button onClick={async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      alert(user.id);
-    }}>
-      Show My User ID
-    </button>
-
     <div className={styles.container}>
+      {/* ----------- USER ID BUTTON ----------- */}
+      <button
+        style={{ margin: '16px 0', padding: '6px 18px', fontSize: 15, background: '#ddeeff', border: '1px solid #88a', borderRadius: 5 }}
+        onClick={async () => {
+          const { data: { user } } = await supabase.auth.getUser();
+          alert(user.id);
+        }}
+      >
+        Show My User ID
+      </button>
+      {/* -------------------------------------- */}
+
       <div className={styles.header}>
         <h2>Your Dashboard</h2>
         <div className={styles.userInfo}>
@@ -100,4 +102,3 @@ export default function DashboardPage() {
     </ScenarioProvider>
   );
 }
-
