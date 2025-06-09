@@ -83,7 +83,6 @@ export default function ScenarioSwitcher() {
       await supabase.from('life_events').delete().eq('user_id', user.id).eq('scenario_id', activeScenario);
       setMessage('Scenario reset.');
       setTimeout(() => setMessage(''), 2000);
-      // Optionally: Trigger a hard reload
       window.location.reload();
     } catch (err) {
       setMessage('Error resetting: ' + err.message);
@@ -91,45 +90,39 @@ export default function ScenarioSwitcher() {
     }
   };
 
+  // ---- UI Layout: all in one clean row
   return (
-    <div className={styles.card} style={{ marginBottom: 16 }}>
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 16, flexWrap: 'wrap' }}>
-        <div>
-          <label style={{ fontWeight: 500 }}>Scenario:&nbsp;</label>
-          <select value={activeScenario} onChange={handleSelect} className={styles.input}>
-            {scenarios.map(s => (
-              <option key={s.id} value={s.id}>{s.name}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <input
-            className={styles.input}
-            placeholder="New scenario name"
-            value={newName}
-            onChange={e => setNewName(e.target.value)}
-            style={{ minWidth: 120 }}
-          />
-          <button className={styles.button} style={{ marginLeft: 4 }} onClick={handleCreate}>+ New</button>
-        </div>
-        <button className={styles.button} onClick={handleDuplicate}>Duplicate</button>
-        <button
-          className={styles.button}
-          style={{
-            background: '#fff7f7',
-            color: '#c0392b',
-            border: '1px solid #c0392b',
-            fontWeight: 600,
-            padding: '2px 12px',
-            marginLeft: 16,
-            fontSize: 13
-          }}
-          onClick={handleReset}
-        >
-          Reset Scenario
-        </button>
-        {message && <span style={{ color: '#38a169', fontSize: 13, marginLeft: 8 }}>{message}</span>}
-      </div>
+    <div className={styles.card} style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+      <label style={{ fontWeight: 500, marginBottom: 0, marginRight: 6 }}>Scenario:</label>
+      <select value={activeScenario} onChange={handleSelect} className={styles.input} style={{ minWidth: 140 }}>
+        {scenarios.map(s => (
+          <option key={s.id} value={s.id}>{s.name}</option>
+        ))}
+      </select>
+      <input
+        className={styles.input}
+        placeholder="New scenario name"
+        value={newName}
+        onChange={e => setNewName(e.target.value)}
+        style={{ minWidth: 120, marginLeft: 6 }}
+      />
+      <button className={styles.button} style={{ marginLeft: 0 }} onClick={handleCreate}>+ New</button>
+      <button className={styles.button} onClick={handleDuplicate}>Duplicate</button>
+      <button
+        className={styles.button}
+        style={{
+          background: '#fff7f7',
+          color: '#c0392b',
+          border: '1px solid #c0392b',
+          fontWeight: 600,
+          padding: '2px 12px',
+          fontSize: 13
+        }}
+        onClick={handleReset}
+      >
+        Reset Scenario
+      </button>
+      {message && <span style={{ color: '#38a169', fontSize: 13, marginLeft: 8 }}>{message}</span>}
     </div>
   );
 }
