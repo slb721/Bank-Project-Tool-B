@@ -44,9 +44,8 @@ ChartJS.register(
   Legend
 );
 
-// Utility to normalize scenarioId for use in JS/DB
 function normalizeScenarioId(scenarioId) {
-  return !scenarioId || scenarioId === '' ? null : scenarioId;
+  return !scenarioId || scenarioId === '' ? '00000000-0000-0000-0000-000000000000' : scenarioId;
 }
 
 export default function Projections({ refresh, scenarioId }) {
@@ -89,13 +88,7 @@ export default function Projections({ refresh, scenarioId }) {
 
         // --- Filter for Correct Scenario ---
         const normScenarioId = normalizeScenarioId(scenarioId);
-        let rows;
-        if (normScenarioId) {
-          rows = allAccounts.filter(r => r.scenario_id === normScenarioId);
-        } else {
-          rows = allAccounts.filter(r => r.scenario_id === null);
-        }
-        // Pick the latest updated_at row if multiples
+        let rows = allAccounts.filter(r => r.scenario_id === normScenarioId);
         let acct = rows.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))[0];
 
         if (!acct || typeof acct.current_balance === 'undefined') {
@@ -108,29 +101,28 @@ export default function Projections({ refresh, scenarioId }) {
         let paycheckQuery = supabase
           .from('paychecks')
           .select('amount, schedule, next_date')
-          .eq('user_id', user.id);
+          .eq('user_id', user.id)
+          .eq('scenario_id', normScenarioId);
 
-        if (normScenarioId) {
-          paycheckQuery = paycheckQuery.eq('scenario_id', normScenarioId);
-        } else {
-          paycheckQuery = paycheckQuery.is('scenario_id', null);
-        }
-
-        const { data: pcs, error: pcsError } = await paycheckQuery;
+        const { data: pcs } = await paycheckQuery;
 
         // --------- FETCH CREDIT CARDS ---------
         let ccQuery = supabase
           .from('credit_cards')
           .select('next_due_date, next_due_amount, avg_future_amount')
-          .eq('user_id', user.id);
+          .eq('user_id', user.id)
+          .eq('scenario_id', normScenarioId);
 
-        if (normScenarioId) {
-          ccQuery = ccQuery.eq('scenario_id', normScenarioId);
-        } else {
-          ccQuery = ccQuery.is('scenario_id', null);
-        }
+        const { data: ccs } = await ccQuery;
 
-        const { data: ccs, error: ccError } = await ccQuery;
+        // --------- FETCH LIFE EVENTS ---------
+        let leQuery = supabase
+          .from('life_events')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('scenario_id', normScenarioId);
+
+        const { data: lifeEvents } = await leQuery;
 
         // --------- DATA GUARDRAILS ---------
         const hasPaycheck = pcs && pcs.length > 0;
@@ -140,6 +132,7 @@ export default function Projections({ refresh, scenarioId }) {
         const today = startOfDay(new Date());
         const horizonEnd = addMonths(today, 6);
 
+        // -- PAYCHECK EVENTS
         pcs.forEach(({ amount, schedule, next_date }) => {
           let dt = parseISO(next_date);
           while (!isBefore(horizonEnd, dt)) {
@@ -151,6 +144,7 @@ export default function Projections({ refresh, scenarioId }) {
           }
         });
 
+        // -- CREDIT CARD EVENTS
         let totalCreditCardExpenses = 0;
         ccs.forEach(({ next_due_date, next_due_amount, avg_future_amount }) => {
           let dt = parseISO(next_due_date);
@@ -167,8 +161,48 @@ export default function Projections({ refresh, scenarioId }) {
           }
         });
 
+        // --------- LIFE EVENTS (ALL TYPES) ---------
+        if (lifeEvents && lifeEvents.length > 0) {
+          lifeEvents.forEach(event => {
+            const {
+              type, amount, start_date, end_date, recurrence
+            } = event;
+            let dt = parseISO(start_date);
+            let lastDate = end_date ? parseISO(end_date) : horizonEnd;
+            // Permanent or one-time
+            if (recurrence === 'one_time') {
+              if (!isBefore(horizonEnd, dt)) {
+                let amt = +amount;
+                if (type === 'income' || type === 'one_time_inflow') {
+                  // inflow: positive
+                } else {
+                  amt = -Math.abs(amt);
+                }
+                events.push({ date: startOfDay(dt), amt });
+              }
+            } else {
+              // Recurring between dt and lastDate
+              if (isBefore(dt, today)) dt = today; // adjust if user set a start in the past
+              for (; !isBefore(horizonEnd, dt) && !isBefore(lastDate, dt); ) {
+                let amt = +amount;
+                if (type === 'income') {
+                  // inflow: positive
+                } else {
+                  amt = -Math.abs(amt);
+                }
+                events.push({ date: startOfDay(dt), amt });
+                if (recurrence === 'weekly') dt = addWeeks(dt, 1);
+                else if (recurrence === 'biweekly') dt = addWeeks(dt, 2);
+                else if (recurrence === 'monthly') dt = addMonths(dt, 1);
+                else dt = addMonths(dt, 1);
+              }
+            }
+          });
+        }
+
         events.sort((a, b) => a.date - b.date);
 
+        // ----------- SIMULATION -----------
         const daily = [];
         let bal = +acct.current_balance;
         let minBal = bal, minDate = today, negDay = null, sim = 0, minSim = 0;

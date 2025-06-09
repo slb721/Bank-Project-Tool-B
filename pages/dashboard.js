@@ -7,8 +7,9 @@ import BalanceForm from '../components/BalanceForm';
 import PaycheckForm from '../components/PaycheckForm';
 import CardForm from '../components/CardForm';
 import Projections from '../components/Projections';
-import ScenarioSwitcher from '../components/ScenarioSwitcher'; // <- NEW
-import { ScenarioProvider, useScenario } from '../context/ScenarioContext'; // <- NEW
+import ScenarioSwitcher from '../components/ScenarioSwitcher';
+import LifeEventForm from '../components/LifeEventForm'; // ADD THIS LINE
+import { ScenarioProvider, useScenario } from '../context/ScenarioContext';
 import styles from '../styles/Dashboard.module.css';
 
 function DashboardInner() {
@@ -17,7 +18,7 @@ function DashboardInner() {
   const [user, setUser] = useState(null);
   const router = useRouter();
 
-  const { activeScenario } = useScenario(); // <- NEW
+  const { activeScenario } = useScenario();
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -96,18 +97,18 @@ function DashboardInner() {
       {/* --------- SCENARIO SWITCHER UI --------- */}
       <ScenarioSwitcher />
 
-      {/* Pass activeScenario as prop to your forms, so they use the correct scenario */}
+      {/* Main dashboard grid with all forms, including LifeEventForm */}
       <div className={styles.dashboardGrid}>
         <BalanceForm onSave={bump} scenarioId={activeScenario} />
         <PaycheckForm onSave={bump} scenarioId={activeScenario} />
         <CardForm onSave={bump} scenarioId={activeScenario} />
+        <LifeEventForm scenarioId={activeScenario} /> {/* <-- LIFE EVENTS IS RIGHT HERE */}
         <Projections refresh={refresh} className={styles.chartWide} scenarioId={activeScenario} />
       </div>
     </div>
   );
 }
 
-// Wrap everything in ScenarioProvider so context works everywhere
 export default function DashboardPage() {
   return (
     <ScenarioProvider>
