@@ -15,7 +15,6 @@ export default function PaycheckForm({ onSave, scenarioId }) {
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Fetch and update when scenario changes
   useEffect(() => {
     fetchPaycheck();
     // eslint-disable-next-line
@@ -33,27 +32,17 @@ export default function PaycheckForm({ onSave, scenarioId }) {
       }
       const { data, error } = await supabase
         .from('paychecks')
-        .select('id, user_id, amount, schedule, next_date, scenario_id')
+        .select('id, user_id, amount, schedule, next_date, scenario_id, updated_at')
         .eq('user_id', user.id);
 
-        if (error) {
-          setMessage('Error fetching paycheck: ' + (error.message || ''));
-          setAmount('');
-          setSchedule('biweekly');
-          setNextDate('');
-          setLoading(false);
-          return;
-        }
-        
-        if (!data || data.length === 0) {
-          setMessage('No paycheck found for this scenario.');
-          setAmount('');
-          setSchedule('biweekly');
-          setNextDate('');
-          setLoading(false);
-          return;
-        }
-        
+      if (error) {
+        setMessage('Error fetching paycheck: ' + (error.message || JSON.stringify(error)));
+        setAmount('');
+        setSchedule('biweekly');
+        setNextDate('');
+        setLoading(false);
+        return;
+      }
 
       const normScenarioId = normalizeScenarioId(scenarioId);
       let rows;
@@ -62,7 +51,7 @@ export default function PaycheckForm({ onSave, scenarioId }) {
       } else {
         rows = data.filter(r => r.scenario_id === null);
       }
-      let row = rows.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))[0];
+      let row = rows.sort((a, b) => new Date(b.updated_at || 0) - new Date(a.updated_at || 0))[0];
 
       if (row) {
         setAmount(row.amount);
@@ -109,10 +98,12 @@ export default function PaycheckForm({ onSave, scenarioId }) {
         await fetchPaycheck();
         if (onSave) onSave();
       } else {
-        setMessage('Error saving paycheck.');
+        setMessage('Error saving paycheck: ' + (error.message || JSON.stringify(error)));
+        console.error('Error saving paycheck:', error);
       }
     } catch (err) {
-      setMessage('Unexpected error.');
+      setMessage('Unexpected error: ' + (err.message || JSON.stringify(err)));
+      console.error('Unexpected error saving paycheck:', err);
     }
     setLoading(false);
   };
