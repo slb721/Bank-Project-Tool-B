@@ -3,6 +3,10 @@ import { supabase } from '../lib/supabaseClient';
 import styles from '../styles/Dashboard.module.css';
 import { useScenario } from '../context/ScenarioContext';
 
+function normalizeScenarioId(scenarioId) {
+  return !scenarioId || scenarioId === '00000000-0000-0000-0000-000000000000' ? null : scenarioId;
+}
+
 export default function ScenarioSwitcher({ onReset }) {
   const { scenarios, setScenarios, activeScenario, setActiveScenario } = useScenario();
   const [newName, setNewName] = useState('');
@@ -68,20 +72,28 @@ export default function ScenarioSwitcher({ onReset }) {
     setActiveScenario(newScenario.id);
   };
 
-  // THE BIG RESET BUTTON
   const handleReset = async () => {
     if (!window.confirm('This will permanently delete all paychecks, credit cards, balances, and life events for this scenario. Are you sure?')) return;
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     try {
-      await supabase.from('accounts').delete().eq('user_id', user.id).eq('scenario_id', activeScenario);
-      await supabase.from('paychecks').delete().eq('user_id', user.id).eq('scenario_id', activeScenario);
-      await supabase.from('credit_cards').delete().eq('user_id', user.id).eq('scenario_id', activeScenario);
-      await supabase.from('life_events').delete().eq('user_id', user.id).eq('scenario_id', activeScenario);
+      const normScenarioId = normalizeScenarioId(activeScenario);
+
+      const del = async (table) => {
+        if (normScenarioId === null) {
+          await supabase.from(table).delete().eq('user_id', user.id).is('scenario_id', null);
+        } else {
+          await supabase.from(table).delete().eq('user_id', user.id).eq('scenario_id', normScenarioId);
+        }
+      };
+      await del('accounts');
+      await del('paychecks');
+      await del('credit_cards');
+      await del('life_events');
       setMessage('Scenario reset.');
-      if (onReset) onReset(); // Extra bump for parent state
+      if (onReset) onReset();
       setTimeout(() => setMessage(''), 1500);
-      setTimeout(() => { window.location.reload(); }, 200); // This ensures UI/data wipe
+      setTimeout(() => { window.location.reload(); }, 200);
     } catch (err) {
       setMessage('Error resetting: ' + err.message);
       setTimeout(() => setMessage(''), 4000);

@@ -20,7 +20,7 @@ const typeOptions = [
 ];
 
 function normalizeScenarioId(scenarioId) {
-  return !scenarioId || scenarioId === '' ? '00000000-0000-0000-0000-000000000000' : scenarioId;
+  return !scenarioId || scenarioId === '00000000-0000-0000-0000-000000000000' ? null : scenarioId;
 }
 
 function getAmountHelpText(type, recurrence, paychecks, selectedLossPaycheckId) {
@@ -86,12 +86,13 @@ export default function LifeEventForm({ onSave, scenarioId, refresh }) {
         return;
       }
       const normScenarioId = normalizeScenarioId(scenarioId);
-      const { data, error } = await supabase
-        .from('life_events')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('scenario_id', normScenarioId)
-        .order('start_date', { ascending: true });
+      let query = supabase.from('life_events').select('*').eq('user_id', user.id);
+      if (normScenarioId === null) {
+        query = query.is('scenario_id', null);
+      } else {
+        query = query.eq('scenario_id', normScenarioId);
+      }
+      const { data, error } = await query.order('start_date', { ascending: true });
       setEvents(error ? [] : (data || []));
     } finally {
       setLoading(false);
@@ -105,12 +106,16 @@ export default function LifeEventForm({ onSave, scenarioId, refresh }) {
       return;
     }
     const normScenarioId = normalizeScenarioId(scenarioId);
-    const { data, error } = await supabase
+    let query = supabase
       .from('paychecks')
       .select('id, amount, schedule, next_date, name, scenario_id, updated_at')
-      .eq('user_id', user.id)
-      .eq('scenario_id', normScenarioId)
-      .order('updated_at', { ascending: false });
+      .eq('user_id', user.id);
+    if (normScenarioId === null) {
+      query = query.is('scenario_id', null);
+    } else {
+      query = query.eq('scenario_id', normScenarioId);
+    }
+    const { data, error } = await query.order('updated_at', { ascending: false });
     setPaychecks(error ? [] : (data || []));
   };
 
@@ -228,7 +233,6 @@ export default function LifeEventForm({ onSave, scenarioId, refresh }) {
           value={type}
           onChange={e => {
             setType(e.target.value);
-            // If switching to job loss, reset amount and lossPaycheckId
             if (e.target.value === 'income_loss') {
               setAmount('');
               setLossPaycheckId('');
@@ -252,7 +256,6 @@ export default function LifeEventForm({ onSave, scenarioId, refresh }) {
               value={lossPaycheckId}
               onChange={e => {
                 setLossPaycheckId(e.target.value);
-                // Auto-set recurrence to match selected paycheck
                 const p = paychecks.find(p => p.id === e.target.value);
                 if (p) setRecurrence(p.schedule);
               }}

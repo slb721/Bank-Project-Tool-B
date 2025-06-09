@@ -3,23 +3,22 @@ import { supabase } from '../lib/supabaseClient';
 import styles from '../styles/Dashboard.module.css';
 
 function normalizeScenarioId(scenarioId) {
-  return !scenarioId || scenarioId === '' ? '00000000-0000-0000-0000-000000000000' : scenarioId;
+  return !scenarioId || scenarioId === '00000000-0000-0000-0000-000000000000' ? null : scenarioId;
 }
 
-export default function PaycheckForm({ onSave, scenarioId }) {
+export default function PaycheckForm({ onSave, scenarioId, refresh }) {
+  const [paychecks, setPaychecks] = useState([]);
   const [amount, setAmount] = useState('');
   const [schedule, setSchedule] = useState('biweekly');
   const [nextDate, setNextDate] = useState('');
+  const [editId, setEditId] = useState(null);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
-
-  const [paychecks, setPaychecks] = useState([]);
-  const [editId, setEditId] = useState(null);
 
   useEffect(() => {
     fetchPaychecks();
     // eslint-disable-next-line
-  }, [scenarioId]);
+  }, [scenarioId, refresh]);
 
   const fetchPaychecks = async () => {
     setLoading(true);
@@ -31,12 +30,13 @@ export default function PaycheckForm({ onSave, scenarioId }) {
         return;
       }
       const normScenarioId = normalizeScenarioId(scenarioId);
-      const { data, error } = await supabase
-        .from('paychecks')
-        .select('id, user_id, amount, schedule, next_date, scenario_id, updated_at')
-        .eq('user_id', user.id)
-        .eq('scenario_id', normScenarioId)
-        .order('updated_at', { ascending: false });
+      let query = supabase.from('paychecks').select('*').eq('user_id', user.id);
+      if (normScenarioId === null) {
+        query = query.is('scenario_id', null);
+      } else {
+        query = query.eq('scenario_id', normScenarioId);
+      }
+      const { data, error } = await query.order('updated_at', { ascending: false });
       setPaychecks(error ? [] : (data || []));
     } finally {
       setLoading(false);
@@ -44,10 +44,10 @@ export default function PaycheckForm({ onSave, scenarioId }) {
   };
 
   const resetForm = () => {
-    setEditId(null);
     setAmount('');
     setSchedule('biweekly');
     setNextDate('');
+    setEditId(null);
   };
 
   const handleSave = async () => {
@@ -63,28 +63,23 @@ export default function PaycheckForm({ onSave, scenarioId }) {
       const normScenarioId = normalizeScenarioId(scenarioId);
       const payload = {
         user_id: user.id,
+        scenario_id: normScenarioId,
         amount: +amount,
         schedule,
         next_date: nextDate,
-        scenario_id: normScenarioId,
       };
       let result;
       if (editId) {
-        result = await supabase
-          .from('paychecks')
-          .update(payload)
-          .eq('id', editId);
+        result = await supabase.from('paychecks').update(payload).eq('id', editId);
       } else {
-        result = await supabase
-          .from('paychecks')
-          .insert(payload);
+        result = await supabase.from('paychecks').insert(payload);
       }
       const { error } = result;
       if (!error) {
-        setMessage('Paycheck saved successfully!');
-        setTimeout(() => setMessage(''), 2000);
+        setMessage('Paycheck saved!');
+        setTimeout(() => setMessage(''), 1500);
         resetForm();
-        await fetchPaychecks();
+        fetchPaychecks();
         if (onSave) onSave();
       } else {
         setMessage('Error saving paycheck: ' + (error.message || JSON.stringify(error)));
@@ -94,26 +89,22 @@ export default function PaycheckForm({ onSave, scenarioId }) {
     }
   };
 
-  const handleEdit = (row) => {
-    setEditId(row.id);
-    setAmount(row.amount);
-    setSchedule(row.schedule);
-    setNextDate(row.next_date ? row.next_date.slice(0, 10) : '');
+  const handleEdit = (p) => {
+    setEditId(p.id);
+    setAmount(p.amount || '');
+    setSchedule(p.schedule || 'biweekly');
+    setNextDate(p.next_date ? p.next_date.slice(0, 10) : '');
   };
 
   const handleDelete = async (id) => {
     setLoading(true);
     try {
-      const { error } = await supabase.from('paychecks').delete().eq('id', id);
-      if (!error) {
-        setMessage('Deleted successfully');
-        setTimeout(() => setMessage(''), 2000);
-        resetForm();
-        await fetchPaychecks();
-        if (onSave) onSave();
-      } else {
-        setMessage('Error deleting: ' + (error.message || JSON.stringify(error)));
-      }
+      await supabase.from('paychecks').delete().eq('id', id);
+      setMessage('Deleted.');
+      setTimeout(() => setMessage(''), 1000);
+      resetForm();
+      fetchPaychecks();
+      if (onSave) onSave();
     } finally {
       setLoading(false);
     }
@@ -121,9 +112,8 @@ export default function PaycheckForm({ onSave, scenarioId }) {
 
   return (
     <div className={styles.card}>
-      <h2 className={styles.heading}>Paycheck</h2>
+      <h2>Paychecks</h2>
       {message && <div className={styles.success}>{message}</div>}
-
       <div className={styles.formGroup}>
         <label>Amount</label>
         <input
@@ -135,11 +125,7 @@ export default function PaycheckForm({ onSave, scenarioId }) {
       </div>
       <div className={styles.formGroup}>
         <label>Schedule</label>
-        <select
-          value={schedule}
-          onChange={e => setSchedule(e.target.value)}
-          disabled={loading}
-        >
+        <select value={schedule} onChange={e => setSchedule(e.target.value)} disabled={loading}>
           <option value="weekly">Weekly</option>
           <option value="biweekly">Biweekly</option>
           <option value="bimonthly">Bimonthly</option>
@@ -155,28 +141,25 @@ export default function PaycheckForm({ onSave, scenarioId }) {
           disabled={loading}
         />
       </div>
-
       <button className={styles.button} onClick={handleSave} disabled={loading}>
-        {loading ? 'Saving...' : editId ? 'Update Paycheck' : 'Add Paycheck'}
+        {loading ? 'Saving...' : editId ? 'Update' : 'Add'}
       </button>
       {editId && (
-        <button className={styles.button} onClick={resetForm} disabled={loading} style={{ marginLeft: 8 }}>
+        <button className={styles.button} onClick={resetForm} style={{ marginLeft: 8 }}>
           Cancel
         </button>
       )}
-
-      <hr style={{ margin: "24px 0" }} />
-
-      <h3 style={{ marginBottom: 8 }}>Your Paychecks</h3>
+      <hr style={{ margin: "16px 0" }} />
+      <h3>Saved Paychecks</h3>
       {paychecks.length === 0 ? (
-        <div>No paychecks for this scenario.</div>
+        <div>No paychecks saved.</div>
       ) : (
         <ul>
-          {paychecks.map((row) => (
-            <li key={row.id} style={{ marginBottom: 8 }}>
-              <b>${row.amount}</b> {row.schedule}, Next: {row.next_date ? row.next_date.slice(0, 10) : 'N/A'}
-              <button className={styles.button} style={{ marginLeft: 8 }} onClick={() => handleEdit(row)} disabled={loading}>Edit</button>
-              <button className={styles.button} style={{ marginLeft: 4, backgroundColor: '#ef4444', color: 'white' }} onClick={() => handleDelete(row.id)} disabled={loading}>Delete</button>
+          {paychecks.map(p => (
+            <li key={p.id}>
+              ${p.amount} - {p.schedule} - Next: {p.next_date ? p.next_date.slice(0, 10) : ''}
+              <button style={{ marginLeft: 8 }} onClick={() => handleEdit(p)} disabled={loading}>✏️</button>
+              <button style={{ marginLeft: 4 }} onClick={() => handleDelete(p.id)} disabled={loading}>🗑️</button>
             </li>
           ))}
         </ul>
