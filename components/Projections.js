@@ -44,7 +44,7 @@ ChartJS.register(
   Legend
 );
 
-export default function Projections({ refresh }) {
+export default function Projections({ refresh, scenarioId }) {
   const [view, setView] = useState('daily');
   const [chartData, setChartData] = useState(null);
   const [stats, setStats] = useState({
@@ -52,7 +52,7 @@ export default function Projections({ refresh }) {
     negDay: null,
     growth: '0.00',
     requiredBalance: '0.00',
-    requiredPay: null, // Changed to null initially
+    requiredPay: null,
   });
 
   useEffect(() => {
@@ -60,24 +60,39 @@ export default function Projections({ refresh }) {
       const user = (await supabase.auth.getUser()).data.user;
       if (!user) return;
 
-      const { data: acct } = await supabase
+      // Filter everything by scenario
+      const accountQuery = supabase
         .from('accounts')
         .select('current_balance')
-        .eq('user_id', user.id)
-        .single();
+        .eq('user_id', user.id);
+
+      if (scenarioId) accountQuery.eq('scenario_id', scenarioId);
+      else accountQuery.is('scenario_id', null);
+
+      const { data: acct } = await accountQuery.single();
       if (!acct) return;
 
-      const { data: pcs } = await supabase
+      const paycheckQuery = supabase
         .from('paychecks')
         .select('amount, schedule, next_date')
         .eq('user_id', user.id);
 
-      const { data: ccs } = await supabase
+      if (scenarioId) paycheckQuery.eq('scenario_id', scenarioId);
+      else paycheckQuery.is('scenario_id', null);
+
+      const { data: pcs } = await paycheckQuery;
+
+      const ccQuery = supabase
         .from('credit_cards')
         .select('next_due_date, next_due_amount, avg_future_amount')
         .eq('user_id', user.id);
 
-      // Check if we have at least one paycheck and one credit card
+      if (scenarioId) ccQuery.eq('scenario_id', scenarioId);
+      else ccQuery.is('scenario_id', null);
+
+      const { data: ccs } = await ccQuery;
+
+      // Everything else as before...
       const hasPaycheck = pcs && pcs.length > 0;
       const hasCreditCard = ccs && ccs.length > 0;
 
@@ -85,7 +100,6 @@ export default function Projections({ refresh }) {
       const today = startOfDay(new Date());
       const horizonEnd = addMonths(today, 6);
 
-      // Generate paycheck events (for chart visualization)
       pcs.forEach(({ amount, schedule, next_date }) => {
         let dt = parseISO(next_date);
         while (!isBefore(horizonEnd, dt)) {
@@ -97,7 +111,6 @@ export default function Projections({ refresh }) {
         }
       });
 
-      // Generate credit card events
       let totalCreditCardExpenses = 0;
       ccs.forEach(({ next_due_date, next_due_amount, avg_future_amount }) => {
         let dt = parseISO(next_due_date);
@@ -238,13 +251,10 @@ export default function Projections({ refresh }) {
       const growth = (((finalBal / startBal - 1) * 2 * 100) || 0).toFixed(2);
       const requiredBalance = Math.max(0, -minSim).toFixed(2);
 
-      // Calculate required paycheck amount
       let requiredPay = null;
       if (hasPaycheck && hasCreditCard) {
         const firstPaycheck = pcs[0];
         const paycheckSchedule = firstPaycheck.schedule;
-        
-        // Calculate number of paychecks in 6 months based on schedule
         let paycheckCount = 0;
         if (paycheckSchedule === 'weekly') {
           paycheckCount = Math.floor(differenceInDays(horizonEnd, today) / 7);
@@ -252,13 +262,10 @@ export default function Projections({ refresh }) {
           paycheckCount = Math.floor(differenceInDays(horizonEnd, today) / 14);
         } else if (paycheckSchedule === 'bimonthly') {
           paycheckCount = Math.floor(differenceInDays(horizonEnd, today) / 15);
-        } else { // monthly
+        } else {
           paycheckCount = 6;
         }
-
         if (paycheckCount > 0) {
-          // Required paycheck = (Total expenses + buffer to avoid hitting 0) / number of paychecks
-          // We need enough to cover expenses and maintain current balance
           const totalNeeded = totalCreditCardExpenses;
           requiredPay = (totalNeeded / paycheckCount).toFixed(2);
         }
@@ -274,7 +281,8 @@ export default function Projections({ refresh }) {
     }
 
     run();
-  }, [refresh, view]);
+    // eslint-disable-next-line
+  }, [refresh, view, scenarioId]);
 
   if (!chartData) return <div className={styles.card}>Loading…</div>;
 

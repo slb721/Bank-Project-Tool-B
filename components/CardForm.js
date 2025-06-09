@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import styles from '../styles/Dashboard.module.css';
 
-export default function CardForm({ onSave }) {
+export default function CardForm({ onSave, scenarioId }) {
   const [name, setName] = useState('');
   const [nextDue, setNextDue] = useState('');
   const [nextAmt, setNextAmt] = useState('');
@@ -14,13 +14,20 @@ export default function CardForm({ onSave }) {
 
   useEffect(() => {
     fetchAll();
-  }, []);
+    // eslint-disable-next-line
+  }, [scenarioId]);
 
   const fetchAll = async () => {
-    const { data } = await supabase
+    const { data: { user } } = await supabase.auth.getUser();
+    const query = supabase
       .from('credit_cards')
       .select('*')
-      .order('next_due_date', { ascending: true });
+      .eq('user_id', user.id);
+
+    if (scenarioId) query.eq('scenario_id', scenarioId);
+    else query.is('scenario_id', null);
+
+    const { data } = await query.order('next_due_date', { ascending: true });
     setItems(data || []);
   };
 
@@ -40,6 +47,7 @@ export default function CardForm({ onSave }) {
       next_due_date: nextDue,
       next_due_amount: +nextAmt,
       avg_future_amount: +avgAmt,
+      scenario_id: scenarioId || null,
     };
     if (editingId) payload.id = editingId;
 
@@ -117,12 +125,11 @@ export default function CardForm({ onSave }) {
         {items.map((cc) => (
           <li key={cc.id} className={styles.listItem}>
             <div className={styles.itemInfo}>
-  <div><strong>Card:</strong> {cc.name}</div>
-  <div><strong>Due:</strong> {cc.next_due_date}</div>
-  <div><strong>Next Amount:</strong> ${parseFloat(cc.next_due_amount).toFixed(2)}</div>
-  <div><strong>Avg:</strong> ${parseFloat(cc.avg_future_amount).toFixed(2)}</div>
-</div>
-
+              <div><strong>Card:</strong> {cc.name}</div>
+              <div><strong>Due:</strong> {cc.next_due_date}</div>
+              <div><strong>Next Amount:</strong> ${parseFloat(cc.next_due_amount).toFixed(2)}</div>
+              <div><strong>Avg:</strong> ${parseFloat(cc.avg_future_amount).toFixed(2)}</div>
+            </div>
             <div className={styles.itemActions}>
               <button className={styles.buttonSm} onClick={() => startEdit(cc)}>Edit</button>
               <button className={`${styles.buttonSm} ${styles.buttonDanger}`} onClick={() => handleDelete(cc.id)}>Delete</button>

@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import styles from '../styles/Dashboard.module.css';
 
-export default function PaycheckForm({ onSave }) {
+export default function PaycheckForm({ onSave, scenarioId }) {
   const [amount, setAmount] = useState('');
   const [schedule, setSchedule] = useState('biweekly');
   const [nextDate, setNextDate] = useState('');
@@ -13,14 +13,22 @@ export default function PaycheckForm({ onSave }) {
 
   useEffect(() => {
     fetchAll();
-  }, []);
+    // eslint-disable-next-line
+  }, [scenarioId]);
 
   const fetchAll = async () => {
-    const { data, error } = await supabase
+    const { data: { user } } = await supabase.auth.getUser();
+    const query = supabase
       .from('paychecks')
       .select('*')
-      .order('next_date', { ascending: true });
+      .eq('user_id', user.id);
+
+    if (scenarioId) query.eq('scenario_id', scenarioId);
+    else query.is('scenario_id', null);
+
+    const { data, error } = await query.order('next_date', { ascending: true });
     if (data) setItems(data);
+    else setItems([]);
   };
 
   const startEdit = (item) => {
@@ -37,6 +45,7 @@ export default function PaycheckForm({ onSave }) {
       schedule,
       next_date: nextDate,
       user_id: user.id,
+      scenario_id: scenarioId || null,
     };
     if (editingId) payload.id = editingId;
 
