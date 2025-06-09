@@ -90,7 +90,7 @@ export default function LifeEventForm({ onSave, scenarioId, refresh }) {
       } else {
         query = query.eq('scenario_id', normScenarioId);
       }
-      const { data, error } = await query.order('start_date', { ascending: true });
+      const { data, error } = await query.order('created_at', { ascending: false });
       setEvents(error ? [] : (data || []));
     } finally {
       setLoading(false);
@@ -106,14 +106,14 @@ export default function LifeEventForm({ onSave, scenarioId, refresh }) {
     const normScenarioId = normalizeScenarioId(scenarioId);
     let query = supabase
       .from('paychecks')
-      .select('id, amount, schedule, next_date, name, scenario_id, updated_at')
+      .select('id, amount, schedule, next_date, name, scenario_id, created_at')
       .eq('user_id', user.id);
     if (normScenarioId === null) {
       query = query.is('scenario_id', null);
     } else {
       query = query.eq('scenario_id', normScenarioId);
     }
-    const { data, error } = await query.order('updated_at', { ascending: false });
+    const { data, error } = await query.order('created_at', { ascending: false });
     setPaychecks(error ? [] : (data || []));
   };
 

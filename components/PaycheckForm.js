@@ -33,7 +33,7 @@ export default function PaycheckForm({ onSave, scenarioId, refresh }) {
       } else {
         query = query.eq('scenario_id', normScenarioId);
       }
-      const { data, error } = await query.order('updated_at', { ascending: false });
+      const { data, error } = await query.order('created_at', { ascending: false });
       setPaychecks(error ? [] : (data || []));
     } finally {
       setLoading(false);
