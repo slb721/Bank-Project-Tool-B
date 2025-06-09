@@ -3,7 +3,8 @@ import { supabase } from '../lib/supabaseClient';
 import styles from '../styles/Dashboard.module.css';
 
 function normalizeScenarioId(scenarioId) {
-  return !scenarioId || scenarioId === '00000000-0000-0000-0000-000000000000' ? null : scenarioId;
+  // Always use the default UUID for "default" scenario
+  return !scenarioId ? '00000000-0000-0000-0000-000000000000' : scenarioId;
 }
 
 export default function PaycheckForm({ onSave, scenarioId, refresh }) {
@@ -27,12 +28,7 @@ export default function PaycheckForm({ onSave, scenarioId, refresh }) {
         return;
       }
       const normScenarioId = normalizeScenarioId(scenarioId);
-      let query = supabase.from('paychecks').select('*').eq('user_id', user.id);
-      if (normScenarioId === null) {
-        query = query.is('scenario_id', null);
-      } else {
-        query = query.eq('scenario_id', normScenarioId);
-      }
+      let query = supabase.from('paychecks').select('*').eq('user_id', user.id).eq('scenario_id', normScenarioId);
       const { data, error } = await query.order('created_at', { ascending: false });
       setPaychecks(error ? [] : (data || []));
     } finally {

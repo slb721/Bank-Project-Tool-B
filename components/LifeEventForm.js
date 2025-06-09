@@ -18,7 +18,8 @@ const typeOptions = [
 ];
 
 function normalizeScenarioId(scenarioId) {
-  return !scenarioId || scenarioId === '00000000-0000-0000-0000-000000000000' ? null : scenarioId;
+  // Always use default UUID for "default" scenario (never null)
+  return !scenarioId ? '00000000-0000-0000-0000-000000000000' : scenarioId;
 }
 
 function getAmountHelpText(type, recurrence, paychecks, selectedLossPaycheckId) {
@@ -84,12 +85,7 @@ export default function LifeEventForm({ onSave, scenarioId, refresh }) {
         return;
       }
       const normScenarioId = normalizeScenarioId(scenarioId);
-      let query = supabase.from('life_events').select('*').eq('user_id', user.id);
-      if (normScenarioId === null) {
-        query = query.is('scenario_id', null);
-      } else {
-        query = query.eq('scenario_id', normScenarioId);
-      }
+      let query = supabase.from('life_events').select('*').eq('user_id', user.id).eq('scenario_id', normScenarioId);
       const { data, error } = await query.order('created_at', { ascending: false });
       setEvents(error ? [] : (data || []));
     } finally {
@@ -107,12 +103,8 @@ export default function LifeEventForm({ onSave, scenarioId, refresh }) {
     let query = supabase
       .from('paychecks')
       .select('id, amount, schedule, next_date, name, scenario_id, created_at')
-      .eq('user_id', user.id);
-    if (normScenarioId === null) {
-      query = query.is('scenario_id', null);
-    } else {
-      query = query.eq('scenario_id', normScenarioId);
-    }
+      .eq('user_id', user.id)
+      .eq('scenario_id', normScenarioId);
     const { data, error } = await query.order('created_at', { ascending: false });
     setPaychecks(error ? [] : (data || []));
   };
