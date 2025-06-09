@@ -278,16 +278,7 @@ export default function Projections({ refresh, scenarioId }) {
         const datasets = [];
         if (view === 'monthly') {
           datasets.push(
-            { type: 'line', label: 'Avg', data: avg, borderColor: '#3b82f6', fill: false },
-            { type: 'line', label: 'High', data: high, borderColor: '#6366f1', fill: '+1' },
-            { type: 'line', label: 'Low', data: low, borderColor: '#ef4444', fill: false },
-            {
-              type: 'bar',
-              label: 'Flow',
-              data: dataFlow,
-              yAxisID: 'y1',
-              backgroundColor: dataFlow.map((f) => (f >= 0 ? '#10b981' : '#ef4444')),
-            },
+            // Only show the Balance line for monthly
             {
               type: 'line',
               label: 'Balance',
@@ -295,9 +286,19 @@ export default function Projections({ refresh, scenarioId }) {
               yAxisID: 'y',
               borderColor: '#3b82f6',
               fill: false,
+              tension: 0.1,
+              pointRadius: 3,
+            },
+            {
+              type: 'bar',
+              label: 'Flow',
+              data: dataFlow,
+              yAxisID: 'y1',
+              backgroundColor: dataFlow.map((f) => (f >= 0 ? '#10b981' : '#ef4444')),
             }
           );
         } else {
+          // daily/weekly unchanged
           datasets.push(
             {
               type: 'line',
@@ -318,6 +319,7 @@ export default function Projections({ refresh, scenarioId }) {
             }
           );
         }
+        
 
         setChartData({ labels, datasets });
 

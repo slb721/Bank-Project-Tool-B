@@ -14,25 +14,28 @@ const typeOptions = [
   { value: 'expense', label: 'Expense Increase', icon: '⬇️' },
   { value: 'one_time_inflow', label: 'One-Time Inflow', icon: '💰' },
   { value: 'one_time_outflow', label: 'One-Time Outflow', icon: '💸' },
-  { value: 'income_loss', label: 'Income Loss (Unemployment/Leave)', icon: '⛔️' },
+  { value: 'income_loss', label: 'Job/Income Loss', icon: '⛔️' },
 ];
 
 function normalizeScenarioId(scenarioId) {
   return !scenarioId || scenarioId === '' ? '00000000-0000-0000-0000-000000000000' : scenarioId;
 }
 
-function getAmountHelpText(type) {
+function getAmountHelpText(type, recurrence, paychecks, selectedLossPaycheckId) {
   switch (type) {
     case 'income':
-      return 'Enter the monthly INCREASE in income (e.g., new job or raise). Enter as a positive number.';
+      return `Enter the ${recurrence} INCREASE in income (positive number).`;
     case 'expense':
-      return 'Enter the monthly INCREASE in expenses (e.g., new recurring bill). Enter as a positive number.';
+      return `Enter the ${recurrence} INCREASE in expenses (positive number).`;
     case 'one_time_inflow':
-      return 'Enter the amount received ONCE (e.g., tax refund). Enter as a positive number.';
+      return 'Enter the amount received ONCE (positive number).';
     case 'one_time_outflow':
-      return 'Enter the amount spent ONCE (e.g., car repair). Enter as a positive number.';
+      return 'Enter the amount spent ONCE (positive number).';
     case 'income_loss':
-      return 'Enter the monthly LOSS of income (e.g., job loss or parental leave). Enter as a positive number.';
+      if (paychecks.length === 0) return 'No income streams found for this scenario.';
+      if (!selectedLossPaycheckId) return 'Select which income stream will be lost and pick the start date of loss.';
+      const paycheck = paychecks.find(p => p.id === selectedLossPaycheckId);
+      return `All income from "${paycheck ? paycheck.name : 'Selected Paycheck'}" will be removed after the start date. If you set an end date, it will resume after that period.`;
     default:
       return '';
   }
@@ -61,8 +64,13 @@ export default function LifeEventForm({ onSave, scenarioId, refresh }) {
   const [events, setEvents] = useState([]);
   const [editId, setEditId] = useState(null);
 
+  // For job loss event
+  const [paychecks, setPaychecks] = useState([]);
+  const [lossPaycheckId, setLossPaycheckId] = useState('');
+
   useEffect(() => {
     fetchEvents();
+    fetchPaychecks();
     // eslint-disable-next-line
   }, [scenarioId, refresh]);
 
@@ -88,6 +96,22 @@ export default function LifeEventForm({ onSave, scenarioId, refresh }) {
     }
   };
 
+  const fetchPaychecks = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      setPaychecks([]);
+      return;
+    }
+    const normScenarioId = normalizeScenarioId(scenarioId);
+    const { data, error } = await supabase
+      .from('paychecks')
+      .select('id, amount, schedule, next_date, scenario_id, updated_at')
+      .eq('user_id', user.id)
+      .eq('scenario_id', normScenarioId)
+      .order('updated_at', { ascending: false });
+    setPaychecks(error ? [] : (data || []));
+  };
+
   const resetForm = () => {
     setEditId(null);
     setLabel('');
@@ -96,6 +120,7 @@ export default function LifeEventForm({ onSave, scenarioId, refresh }) {
     setStartDate('');
     setEndDate('');
     setRecurrence('one_time');
+    setLossPaycheckId('');
   };
 
   const handleSave = async () => {
@@ -110,15 +135,17 @@ export default function LifeEventForm({ onSave, scenarioId, refresh }) {
       }
       const normScenarioId = normalizeScenarioId(scenarioId);
 
-      const payload = {
+      // For job loss, encode the selected paycheck id
+      let payload = {
         user_id: user.id,
         scenario_id: normScenarioId,
         type,
-        label: label || '(No Label)',
-        amount: +amount,
+        label: label || (type === 'income_loss' ? 'Job Loss' : '(No Label)'),
+        amount: type === 'income_loss' ? 0 : +amount,
         start_date: startDate,
         end_date: recurrence === 'one_time' || !endDate ? null : endDate,
-        recurrence
+        recurrence,
+        related_paycheck_id: type === 'income_loss' ? lossPaycheckId : null,
       };
 
       let result;
@@ -155,6 +182,7 @@ export default function LifeEventForm({ onSave, scenarioId, refresh }) {
     setStartDate(event.start_date ? event.start_date.slice(0, 10) : '');
     setEndDate(event.end_date ? event.end_date.slice(0, 10) : '');
     setRecurrence(event.recurrence);
+    setLossPaycheckId(event.related_paycheck_id || '');
   };
 
   const handleDelete = async (id) => {
@@ -175,9 +203,50 @@ export default function LifeEventForm({ onSave, scenarioId, refresh }) {
     }
   };
 
+  // SCENARIO RESET FUNCTION
+  const handleResetScenario = async () => {
+    if (!window.confirm('This will delete all paychecks, cards, balances, and life events for this scenario. Are you sure?')) return;
+    setLoading(true);
+    try {
+      const normScenarioId = normalizeScenarioId(scenarioId);
+      const { data: { user } } = await supabase.auth.getUser();
+      // Remove all scenario-specific data
+      await supabase.from('accounts').delete().eq('user_id', user.id).eq('scenario_id', normScenarioId);
+      await supabase.from('paychecks').delete().eq('user_id', user.id).eq('scenario_id', normScenarioId);
+      await supabase.from('credit_cards').delete().eq('user_id', user.id).eq('scenario_id', normScenarioId);
+      await supabase.from('life_events').delete().eq('user_id', user.id).eq('scenario_id', normScenarioId);
+      setMessage('Scenario reset.');
+      setTimeout(() => setMessage(''), 2000);
+      resetForm();
+      fetchEvents();
+      if (onSave) onSave();
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className={styles.card}>
-      <h2 className={styles.heading}>Life Events</h2>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+        <h2 className={styles.heading}>Life Events</h2>
+        <button
+          className={styles.button}
+          style={{
+            background: '#fff7f7',
+            color: '#c0392b',
+            border: '1px solid #c0392b',
+            fontWeight: 600,
+            padding: '2px 10px',
+            marginBottom: 8,
+            fontSize: 13
+          }}
+          onClick={handleResetScenario}
+          disabled={loading}
+          title="Reset everything in this scenario"
+        >
+          Reset Scenario
+        </button>
+      </div>
       {message && <div className={styles.success}>{message}</div>}
 
       <div className={styles.formGroup}>
@@ -202,19 +271,34 @@ export default function LifeEventForm({ onSave, scenarioId, refresh }) {
           ))}
         </select>
       </div>
-      <div className={styles.formGroup}>
-        <label>Amount</label>
-        <input
-          type="number"
-          value={amount}
-          onChange={e => setAmount(e.target.value)}
-          disabled={loading}
-          placeholder="Positive number"
-        />
-        <small style={{ color: '#555', display: 'block', marginTop: 2 }}>
-          {getAmountHelpText(type)}
-        </small>
-      </div>
+      {type === 'income_loss' ? (
+        <div className={styles.formGroup}>
+          <label>Select Income Stream</label>
+          <select
+            value={lossPaycheckId}
+            onChange={e => setLossPaycheckId(e.target.value)}
+            disabled={loading || paychecks.length === 0}
+          >
+            <option value="">-- Select --</option>
+            {paychecks.map(pc => (
+              <option key={pc.id} value={pc.id}>
+                {pc.amount ? `$${pc.amount}` : ''} {pc.schedule} (Next: {pc.next_date ? pc.next_date.slice(0, 10) : 'N/A'})
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : (
+        <div className={styles.formGroup}>
+          <label>Amount</label>
+          <input
+            type="number"
+            value={amount}
+            onChange={e => setAmount(e.target.value)}
+            disabled={loading}
+            placeholder="Positive number"
+          />
+        </div>
+      )}
       <div className={styles.formGroup}>
         <label>Start Date</label>
         <input
@@ -247,8 +331,10 @@ export default function LifeEventForm({ onSave, scenarioId, refresh }) {
           />
         </div>
       )}
-
-      <button className={styles.button} onClick={handleSave} disabled={loading}>
+      <div style={{ color: '#555', margin: '8px 0', fontSize: 13 }}>
+        {getAmountHelpText(type, recurrence, paychecks, lossPaycheckId)}
+      </div>
+      <button className={styles.button} onClick={handleSave} disabled={loading || (type === 'income_loss' && !lossPaycheckId)}>
         {loading ? 'Saving...' : editId ? 'Update Event' : 'Add Event'}
       </button>
       {editId && (
@@ -263,7 +349,7 @@ export default function LifeEventForm({ onSave, scenarioId, refresh }) {
       {events.length === 0 ? (
         <div>No events yet.</div>
       ) : (
-        <table style={{ width: '100%', fontSize: 14, borderCollapse: 'collapse' }}>
+        <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ borderBottom: '1px solid #ccc' }}>
               <th align="left">Type</th>
@@ -272,7 +358,7 @@ export default function LifeEventForm({ onSave, scenarioId, refresh }) {
               <th align="left">Start</th>
               <th align="left">End</th>
               <th align="left">Recurrence</th>
-              <th></th>
+              <th align="center">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -281,14 +367,44 @@ export default function LifeEventForm({ onSave, scenarioId, refresh }) {
                 <td>{typeIcon(row.type)} {typeLabel(row.type)}</td>
                 <td>{row.label}</td>
                 <td align="right" style={{ color: (row.type === 'income' || row.type === 'one_time_inflow') ? '#059669' : '#b91c1c', fontWeight: 600 }}>
-                  {(row.type === 'income' || row.type === 'one_time_inflow') ? '+' : '-'}${row.amount}
+                  {(row.type === 'income' || row.type === 'one_time_inflow') ? '+' : row.type === 'income_loss' ? '—' : '-'}{row.amount}
                 </td>
                 <td>{row.start_date ? row.start_date.slice(0, 10) : ''}</td>
                 <td>{row.end_date ? row.end_date.slice(0, 10) : (row.recurrence === 'one_time' ? '—' : 'No end')}</td>
                 <td>{row.recurrence.replace('_', ' ')}</td>
-                <td>
-                  <button className={styles.button} style={{ marginLeft: 0, marginRight: 4 }} onClick={() => handleEdit(row)} disabled={loading}>Edit</button>
-                  <button className={styles.button} style={{ backgroundColor: '#ef4444', color: 'white' }} onClick={() => handleDelete(row.id)} disabled={loading}>Delete</button>
+                <td style={{ textAlign: 'center' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'center', justifyContent: 'center' }}>
+                    <button
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#333',
+                        fontSize: 16,
+                        cursor: 'pointer',
+                        padding: 0,
+                        margin: 0,
+                        lineHeight: 1
+                      }}
+                      title="Edit"
+                      onClick={() => handleEdit(row)}
+                      disabled={loading}
+                    >✏️</button>
+                    <button
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#c0392b',
+                        fontSize: 16,
+                        cursor: 'pointer',
+                        padding: 0,
+                        margin: 0,
+                        lineHeight: 1
+                      }}
+                      title="Delete"
+                      onClick={() => handleDelete(row.id)}
+                      disabled={loading}
+                    >🗑️</button>
+                  </div>
                 </td>
               </tr>
             ))}
