@@ -1,5 +1,3 @@
-// components/LifeEventForm.js
-
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import styles from '../styles/Dashboard.module.css';
@@ -12,18 +10,45 @@ const recurrenceOptions = [
 ];
 
 const typeOptions = [
-  { value: 'income', label: 'Income Increase' },
-  { value: 'expense', label: 'Expense Increase' },
-  { value: 'one_time_inflow', label: 'One-Time Inflow' },
-  { value: 'one_time_outflow', label: 'One-Time Outflow' },
-  { value: 'income_loss', label: 'Income Loss (e.g., unemployment)' },
+  { value: 'income', label: 'Income Increase', icon: '⬆️' },
+  { value: 'expense', label: 'Expense Increase', icon: '⬇️' },
+  { value: 'one_time_inflow', label: 'One-Time Inflow', icon: '💰' },
+  { value: 'one_time_outflow', label: 'One-Time Outflow', icon: '💸' },
+  { value: 'income_loss', label: 'Income Loss (Unemployment/Leave)', icon: '⛔️' },
 ];
 
 function normalizeScenarioId(scenarioId) {
   return !scenarioId || scenarioId === '' ? '00000000-0000-0000-0000-000000000000' : scenarioId;
 }
 
-export default function LifeEventForm({ onSave, scenarioId }) {
+function getAmountHelpText(type) {
+  switch (type) {
+    case 'income':
+      return 'Enter the monthly INCREASE in income (e.g., new job or raise). Enter as a positive number.';
+    case 'expense':
+      return 'Enter the monthly INCREASE in expenses (e.g., new recurring bill). Enter as a positive number.';
+    case 'one_time_inflow':
+      return 'Enter the amount received ONCE (e.g., tax refund). Enter as a positive number.';
+    case 'one_time_outflow':
+      return 'Enter the amount spent ONCE (e.g., car repair). Enter as a positive number.';
+    case 'income_loss':
+      return 'Enter the monthly LOSS of income (e.g., job loss or parental leave). Enter as a positive number.';
+    default:
+      return '';
+  }
+}
+
+function typeLabel(type) {
+  const opt = typeOptions.find(o => o.value === type);
+  return opt ? opt.label : type;
+}
+
+function typeIcon(type) {
+  const opt = typeOptions.find(o => o.value === type);
+  return opt ? opt.icon : '';
+}
+
+export default function LifeEventForm({ onSave, scenarioId, refresh }) {
   const [label, setLabel] = useState('');
   const [type, setType] = useState('income');
   const [amount, setAmount] = useState('');
@@ -39,7 +64,7 @@ export default function LifeEventForm({ onSave, scenarioId }) {
   useEffect(() => {
     fetchEvents();
     // eslint-disable-next-line
-  }, [scenarioId]);
+  }, [scenarioId, refresh]);
 
   const fetchEvents = async () => {
     setLoading(true);
@@ -184,8 +209,11 @@ export default function LifeEventForm({ onSave, scenarioId }) {
           value={amount}
           onChange={e => setAmount(e.target.value)}
           disabled={loading}
-          placeholder="Amount (e.g. 100, -250)"
+          placeholder="Positive number"
         />
+        <small style={{ color: '#555', display: 'block', marginTop: 2 }}>
+          {getAmountHelpText(type)}
+        </small>
       </div>
       <div className={styles.formGroup}>
         <label>Start Date</label>
@@ -235,19 +263,37 @@ export default function LifeEventForm({ onSave, scenarioId }) {
       {events.length === 0 ? (
         <div>No events yet.</div>
       ) : (
-        <ul>
-          {events.map((row) => (
-            <li key={row.id} style={{ marginBottom: 8 }}>
-              <b>{row.label}</b> ({typeOptions.find(o => o.value === row.type)?.label || row.type})
-              : <span>{row.amount > 0 ? '+' : ''}{row.amount}</span>
-              {' | '}
-              {row.recurrence.replace('_', ' ')} {row.start_date ? `from ${row.start_date.slice(0,10)}` : ''}
-              {row.end_date && ` to ${row.end_date.slice(0,10)}`}
-              <button className={styles.button} style={{ marginLeft: 8 }} onClick={() => handleEdit(row)} disabled={loading}>Edit</button>
-              <button className={styles.button} style={{ marginLeft: 4, backgroundColor: '#ef4444', color: 'white' }} onClick={() => handleDelete(row.id)} disabled={loading}>Delete</button>
-            </li>
-          ))}
-        </ul>
+        <table style={{ width: '100%', fontSize: 14, borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ borderBottom: '1px solid #ccc' }}>
+              <th align="left">Type</th>
+              <th align="left">Label</th>
+              <th align="right">Amount</th>
+              <th align="left">Start</th>
+              <th align="left">End</th>
+              <th align="left">Recurrence</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {events.map((row) => (
+              <tr key={row.id} style={{ borderBottom: '1px solid #eee', verticalAlign: 'middle' }}>
+                <td>{typeIcon(row.type)} {typeLabel(row.type)}</td>
+                <td>{row.label}</td>
+                <td align="right" style={{ color: (row.type === 'income' || row.type === 'one_time_inflow') ? '#059669' : '#b91c1c', fontWeight: 600 }}>
+                  {(row.type === 'income' || row.type === 'one_time_inflow') ? '+' : '-'}${row.amount}
+                </td>
+                <td>{row.start_date ? row.start_date.slice(0, 10) : ''}</td>
+                <td>{row.end_date ? row.end_date.slice(0, 10) : (row.recurrence === 'one_time' ? '—' : 'No end')}</td>
+                <td>{row.recurrence.replace('_', ' ')}</td>
+                <td>
+                  <button className={styles.button} style={{ marginLeft: 0, marginRight: 4 }} onClick={() => handleEdit(row)} disabled={loading}>Edit</button>
+                  <button className={styles.button} style={{ backgroundColor: '#ef4444', color: 'white' }} onClick={() => handleDelete(row.id)} disabled={loading}>Delete</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       )}
     </div>
   );

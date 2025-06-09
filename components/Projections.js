@@ -391,24 +391,27 @@ export default function Projections({ refresh, scenarioId }) {
           </div>
         </div>
         <div style={{ height: '320px' }}>
-          <Chart
-            data={chartData}
-            options={{
-              responsive: true,
-              maintainAspectRatio: false,
-              scales: {
-                x: { grid: { display: false }, ticks: { maxTicksLimit: 12 } },
-                y: { position: 'left', title: { display: true, text: 'Balance ($)' } },
-                y1: view === 'monthly'
-                  ? {}
-                  : { position: 'right', title: { display: true, text: 'Flow ($)' }, grid: { drawOnChartArea: false } },
-              },
-              plugins: {
-                legend: { position: 'top' },
-                tooltip: { mode: 'index', intersect: false },
-              },
-            }}
-          />
+        <Chart
+  data={chartData}
+  options={{
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      x: { grid: { display: false }, ticks: { maxTicksLimit: 12 } },
+      y: { position: 'left', title: { display: true, text: 'Balance ($)' } },
+      y1: {
+        position: 'right', // <-- always right, not just in daily/weekly
+        title: { display: true, text: 'Flow ($)' },
+        grid: { drawOnChartArea: false },
+      },
+    },
+    plugins: {
+      legend: { position: 'top' },
+      tooltip: { mode: 'index', intersect: false },
+    },
+  }}
+/>
+
         </div>
       </div>
 
