@@ -4,7 +4,6 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import styles from '../styles/Dashboard.module.css';
 
-// Utility to normalize scenarioId for use in JS/DB
 function normalizeScenarioId(scenarioId) {
   return !scenarioId || scenarioId === '' ? null : scenarioId;
 }
@@ -14,7 +13,12 @@ export default function BalanceForm({ onSave, scenarioId }) {
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Always fetch all accounts for this user, and select the latest record for scenario
+  // Fetch and update when scenario changes
+  useEffect(() => {
+    fetchBalance();
+    // eslint-disable-next-line
+  }, [scenarioId]);
+
   const fetchBalance = async () => {
     setLoading(true);
     try {
@@ -25,8 +29,6 @@ export default function BalanceForm({ onSave, scenarioId }) {
         setLoading(false);
         return;
       }
-
-      // Fetch all account rows for this user
       const { data, error } = await supabase
         .from('accounts')
         .select('id, user_id, current_balance, scenario_id, updated_at')
@@ -40,15 +42,12 @@ export default function BalanceForm({ onSave, scenarioId }) {
       }
 
       const normScenarioId = normalizeScenarioId(scenarioId);
-
-      // Filter for the right scenario row (null for Default), pick the most recent if somehow more than one
       let rows;
       if (normScenarioId) {
         rows = data.filter(r => r.scenario_id === normScenarioId);
       } else {
         rows = data.filter(r => r.scenario_id === null);
       }
-      // Pick the latest updated_at row if multiples (should not happen anymore)
       let row = rows.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))[0];
 
       if (row && typeof row.current_balance !== 'undefined') {
@@ -62,11 +61,6 @@ export default function BalanceForm({ onSave, scenarioId }) {
     }
     setLoading(false);
   };
-
-  useEffect(() => {
-    fetchBalance();
-    // eslint-disable-next-line
-  }, [scenarioId]);
 
   const handleSave = async () => {
     setLoading(true);

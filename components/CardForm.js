@@ -1,142 +1,156 @@
 // components/CardForm.js
+
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import styles from '../styles/Dashboard.module.css';
 
-export default function CardForm({ onSave, scenarioId }) {
-  const [name, setName] = useState('');
-  const [nextDue, setNextDue] = useState('');
-  const [nextAmt, setNextAmt] = useState('');
-  const [avgAmt, setAvgAmt] = useState('');
-  const [items, setItems] = useState([]);
-  const [editingId, setEditingId] = useState(null);
-  const [message, setMessage] = useState('');
+function normalizeScenarioId(scenarioId) {
+  return !scenarioId || scenarioId === '' ? null : scenarioId;
+}
 
+export default function CardForm({ onSave, scenarioId }) {
+  const [nextDueDate, setNextDueDate] = useState('');
+  const [nextDueAmount, setNextDueAmount] = useState('');
+  const [avgFutureAmount, setAvgFutureAmount] = useState('');
+  const [message, setMessage] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  // Fetch and update when scenario changes
   useEffect(() => {
-    fetchAll();
+    fetchCard();
     // eslint-disable-next-line
   }, [scenarioId]);
 
-  const fetchAll = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    const query = supabase
-      .from('credit_cards')
-      .select('*')
-      .eq('user_id', user.id);
+  const fetchCard = async () => {
+    setLoading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setNextDueDate('');
+        setNextDueAmount('');
+        setAvgFutureAmount('');
+        setMessage('No user logged in.');
+        setLoading(false);
+        return;
+      }
+      const { data, error } = await supabase
+        .from('credit_cards')
+        .select('id, user_id, next_due_date, next_due_amount, avg_future_amount, scenario_id, updated_at')
+        .eq('user_id', user.id);
 
-    if (scenarioId) query.eq('scenario_id', scenarioId);
-    else query.is('scenario_id', null);
+      if (error) {
+        setMessage('Error fetching card.');
+        setNextDueDate('');
+        setNextDueAmount('');
+        setAvgFutureAmount('');
+        setLoading(false);
+        return;
+      }
 
-    const { data } = await query.order('next_due_date', { ascending: true });
-    setItems(data || []);
-  };
+      const normScenarioId = normalizeScenarioId(scenarioId);
+      let rows;
+      if (normScenarioId) {
+        rows = data.filter(r => r.scenario_id === normScenarioId);
+      } else {
+        rows = data.filter(r => r.scenario_id === null);
+      }
+      let row = rows.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))[0];
 
-  const startEdit = (cc) => {
-    setEditingId(cc.id);
-    setName(cc.name);
-    setNextDue(cc.next_due_date);
-    setNextAmt(cc.next_due_amount);
-    setAvgAmt(cc.avg_future_amount);
+      if (row) {
+        setNextDueDate(row.next_due_date ? row.next_due_date.slice(0, 10) : '');
+        setNextDueAmount(row.next_due_amount || '');
+        setAvgFutureAmount(row.avg_future_amount || '');
+      } else {
+        setNextDueDate('');
+        setNextDueAmount('');
+        setAvgFutureAmount('');
+      }
+    } catch (err) {
+      setMessage('Exception fetching card.');
+      setNextDueDate('');
+      setNextDueAmount('');
+      setAvgFutureAmount('');
+    }
+    setLoading(false);
   };
 
   const handleSave = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    const payload = {
-      user_id: user.id,
-      name: name.trim(),
-      next_due_date: nextDue,
-      next_due_amount: +nextAmt,
-      avg_future_amount: +avgAmt,
-      scenario_id: scenarioId || null,
-    };
-    if (editingId) payload.id = editingId;
+    setLoading(true);
+    setMessage('');
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setMessage('Not signed in.');
+        setLoading(false);
+        return;
+      }
+      const normScenarioId = normalizeScenarioId(scenarioId);
+      const payload = {
+        user_id: user.id,
+        next_due_date: nextDueDate,
+        next_due_amount: +nextDueAmount,
+        avg_future_amount: +avgFutureAmount,
+        scenario_id: normScenarioId,
+      };
 
-    const { error } = await supabase
-      .from('credit_cards')
-      .upsert(payload, { onConflict: ['id'] });
+      const { error } = await supabase
+        .from('credit_cards')
+        .upsert(payload, { onConflict: ['user_id', 'scenario_id'] });
 
-    if (!error) {
-      setMessage('Card saved successfully!');
-      setTimeout(() => setMessage(''), 3000);
-      setName('');
-      setNextDue('');
-      setNextAmt('');
-      setAvgAmt('');
-      setEditingId(null);
-      fetchAll();
-      onSave();
+      if (!error) {
+        setMessage('Card saved successfully!');
+        setTimeout(() => setMessage(''), 3000);
+        await fetchCard();
+        if (onSave) onSave();
+      } else {
+        setMessage('Error saving card.');
+      }
+    } catch (err) {
+      setMessage('Unexpected error.');
     }
-  };
-
-  const handleDelete = async (id) => {
-    await supabase.from('credit_cards').delete().eq('id', id);
-    setMessage('Card deleted.');
-    setTimeout(() => setMessage(''), 3000);
-    fetchAll();
-    onSave();
+    setLoading(false);
   };
 
   return (
     <div className={styles.card}>
-      <h2 className={styles.heading}>Credit Cards</h2>
+      <h2 className={styles.heading}>Credit Card</h2>
       {message && <div className={styles.success}>{message}</div>}
-
-      <div className={styles.formGroup}>
-        <label>Card Name</label>
-        <input
-          type="text"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-      </div>
 
       <div className={styles.formGroup}>
         <label>Next Due Date</label>
         <input
           type="date"
-          value={nextDue}
-          onChange={(e) => setNextDue(e.target.value)}
+          value={nextDueDate}
+          onChange={e => setNextDueDate(e.target.value)}
+          disabled={loading}
         />
       </div>
-
       <div className={styles.formGroup}>
         <label>Next Due Amount</label>
         <input
           type="number"
-          value={nextAmt}
-          onChange={(e) => setNextAmt(e.target.value)}
+          value={nextDueAmount}
+          onChange={e => setNextDueAmount(e.target.value)}
+          disabled={loading}
         />
       </div>
-
       <div className={styles.formGroup}>
         <label>Avg Future Amount</label>
         <input
           type="number"
-          value={avgAmt}
-          onChange={(e) => setAvgAmt(e.target.value)}
+          value={avgFutureAmount}
+          onChange={e => setAvgFutureAmount(e.target.value)}
+          disabled={loading}
         />
       </div>
 
-      <button className={styles.button} onClick={handleSave}>
-        {editingId ? 'Update' : 'Add'} Card
+      <button
+        className={styles.button}
+        onClick={handleSave}
+        disabled={loading}
+      >
+        {loading ? 'Saving...' : 'Save Card'}
       </button>
-
-      <ul className={styles.itemList}>
-        {items.map((cc) => (
-          <li key={cc.id} className={styles.listItem}>
-            <div className={styles.itemInfo}>
-              <div><strong>Card:</strong> {cc.name}</div>
-              <div><strong>Due:</strong> {cc.next_due_date}</div>
-              <div><strong>Next Amount:</strong> ${parseFloat(cc.next_due_amount).toFixed(2)}</div>
-              <div><strong>Avg:</strong> ${parseFloat(cc.avg_future_amount).toFixed(2)}</div>
-            </div>
-            <div className={styles.itemActions}>
-              <button className={styles.buttonSm} onClick={() => startEdit(cc)}>Edit</button>
-              <button className={`${styles.buttonSm} ${styles.buttonDanger}`} onClick={() => handleDelete(cc.id)}>Delete</button>
-            </div>
-          </li>
-        ))}
-      </ul>
     </div>
   );
 }
