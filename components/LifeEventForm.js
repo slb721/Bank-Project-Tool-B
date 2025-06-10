@@ -144,7 +144,6 @@ export default function LifeEventForm({ onSave, scenarioId, refresh }) {
     }
   };
 
-  // UI logic for Job Loss: require selecting paycheck
   const isJobLoss = type === 'income_loss';
 
   return (
@@ -161,6 +160,7 @@ export default function LifeEventForm({ onSave, scenarioId, refresh }) {
         <label>Type</label>
         <select value={type} onChange={e => setType(e.target.value)} disabled={loading}>
           <option value="one_time_outflow">One-Time Expense</option>
+          <option value="one_time_inflow">One-Time Cash Increase</option>
           <option value="expense_increase">Expense Increase (recurring)</option>
           <option value="income_increase">Income Increase (recurring)</option>
           <option value="income_loss">Job Loss/Leave (pick income stream)</option>
@@ -171,7 +171,7 @@ export default function LifeEventForm({ onSave, scenarioId, refresh }) {
         <label>
           Amount
           <span style={{ color: '#888', fontSize: 11, marginLeft: 5 }}>
-            ({type.startsWith('income') ? '+' : '-'} value)
+            ({type.startsWith('income') || type === 'one_time_inflow' ? '+' : '-'} value)
           </span>
         </label>
         <input

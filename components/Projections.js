@@ -148,7 +148,7 @@ export default function Projections({ refresh, scenarioId }) {
           const sd = ev.start_date ? parseISO(ev.start_date) : null;
           const ed = ev.end_date ? parseISO(ev.end_date) : null;
           const amt = +ev.amount;
-          // Income/Expense Recurrence
+          // Expense/Income Increase (recurring)
           if (ev.type === 'expense_increase' || ev.type === 'income_increase') {
             let dt = startOfDay(sd);
             const sign = ev.type === 'expense_increase' ? -1 : 1;
@@ -160,20 +160,20 @@ export default function Projections({ refresh, scenarioId }) {
               else dt = addMonths(dt, 1);
             }
           }
-          // One-time outflow
+          // One-time outflow (negative) or inflow (positive)
           if (ev.type === 'one_time_outflow') {
             events.push({ date: startOfDay(sd), amt: -Math.abs(amt) });
           }
+          if (ev.type === 'one_time_inflow') {
+            events.push({ date: startOfDay(sd), amt: Math.abs(amt) });
+          }
           // Income loss (job loss)
           if (ev.type === 'income_loss' && ev.related_paycheck_id) {
-            // Remove ALL income events for that paycheck from the event date (and for the duration, if any)
-            // Here we mark them as negative income events (simulate as extra negative flows)
             let p = (paychecks || []).find(x => x.id === ev.related_paycheck_id);
             if (p) {
               let lossStart = startOfDay(sd);
               let lossEnd = ed && ed > lossStart ? ed : horizonEnd;
               let dt = parseISO(p.next_date);
-              // Only remove after the loss date
               while (!isBefore(horizonEnd, dt)) {
                 if (dt >= lossStart && dt <= lossEnd) {
                   events.push({ date: dt, amt: -Math.abs(p.amount) });
@@ -279,8 +279,10 @@ export default function Projections({ refresh, scenarioId }) {
               label: 'Balance',
               data: dataBal,
               yAxisID: 'y',
-              borderColor: '#3b82f6',
+              borderColor: '#ff9900',
               fill: false,
+              order: 100,
+              borderWidth: 3
             }
           );
         } else {
@@ -290,10 +292,12 @@ export default function Projections({ refresh, scenarioId }) {
               label: 'Balance',
               data: dataBal,
               yAxisID: 'y',
-              borderColor: '#3b82f6',
+              borderColor: '#ff9900',
               fill: false,
               tension: 0.1,
               pointRadius: view === 'daily' ? 0 : 3,
+              order: 100,
+              borderWidth: 3
             },
             {
               type: 'bar',
@@ -369,7 +373,7 @@ export default function Projections({ refresh, scenarioId }) {
       <div className={styles.chartWide}>
         <div className={styles.chartHeader}>
           <h3 className={styles.chartTitle}>6-Month Projection</h3>
-          <div className={styles.btnGroup}>
+          <div className={styles.btnGroup} style={{ display: 'flex', gap: '10px' }}>
             {['daily', 'weekly', 'monthly'].map((v) => (
               <button key={v} onClick={() => setView(v)} className={view === v ? styles.active : ''}>
                 {v[0].toUpperCase() + v.slice(1)}
