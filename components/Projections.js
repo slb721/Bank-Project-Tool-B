@@ -1,5 +1,3 @@
-// components/Projections.js
-
 import React, { useEffect, useState } from 'react';
 import styles from '../styles/Dashboard.module.css';
 import { supabase } from '../lib/supabaseClient';
@@ -45,7 +43,7 @@ ChartJS.register(
 );
 
 function normalizeScenarioId(scenarioId) {
-  return !scenarioId || scenarioId === '' ? '00000000-0000-0000-0000-000000000000' : scenarioId;
+  return !scenarioId || scenarioId === '00000000-0000-0000-0000-000000000000' ? null : scenarioId;
 }
 
 export default function Projections({ refresh, scenarioId }) {
@@ -68,28 +66,20 @@ export default function Projections({ refresh, scenarioId }) {
       setChartData(null);
 
       try {
-        const user = (await supabase.auth.getUser()).data.user;
+        const { data: { user } } = await supabase.auth.getUser();
         if (!user) {
           setLoading(false);
           return;
         }
 
-        // --- FETCH ALL ACCOUNTS FOR USER ---
-        const { data: allAccounts, error: acctError } = await supabase
-          .from('accounts')
-          .select('current_balance, id, user_id, scenario_id, updated_at')
-          .eq('user_id', user.id);
-
-        if (acctError) {
-          setAccountExists(false);
-          setLoading(false);
-          return;
-        }
-
-        // --- Filter for Correct Scenario ---
+        // 1. Fetch Account (balance) for scenario
         const normScenarioId = normalizeScenarioId(scenarioId);
-        let rows = allAccounts.filter(r => r.scenario_id === normScenarioId);
-        let acct = rows.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))[0];
+        let acctQuery = supabase.from('accounts').select('*').eq('user_id', user.id);
+        acctQuery = normScenarioId === null
+          ? acctQuery.is('scenario_id', null)
+          : acctQuery.eq('scenario_id', normScenarioId);
+        const { data: acctRows, error: acctError } = await acctQuery;
+        let acct = (acctRows || []).sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))[0];
 
         if (!acct || typeof acct.current_balance === 'undefined') {
           setAccountExists(false);
@@ -97,43 +87,34 @@ export default function Projections({ refresh, scenarioId }) {
           return;
         }
 
-        // --------- FETCH PAYCHECKS ---------
-        let paycheckQuery = supabase
-          .from('paychecks')
-          .select('amount, schedule, next_date')
-          .eq('user_id', user.id)
-          .eq('scenario_id', normScenarioId);
+        // 2. Fetch Paychecks
+        let paycheckQuery = supabase.from('paychecks').select('*').eq('user_id', user.id);
+        paycheckQuery = normScenarioId === null
+          ? paycheckQuery.is('scenario_id', null)
+          : paycheckQuery.eq('scenario_id', normScenarioId);
+        const { data: paychecks } = await paycheckQuery;
 
-        const { data: pcs } = await paycheckQuery;
+        // 3. Fetch Credit Cards
+        let ccQuery = supabase.from('credit_cards').select('*').eq('user_id', user.id);
+        ccQuery = normScenarioId === null
+          ? ccQuery.is('scenario_id', null)
+          : ccQuery.eq('scenario_id', normScenarioId);
+        const { data: cards } = await ccQuery;
 
-        // --------- FETCH CREDIT CARDS ---------
-        let ccQuery = supabase
-          .from('credit_cards')
-          .select('next_due_date, next_due_amount, avg_future_amount')
-          .eq('user_id', user.id)
-          .eq('scenario_id', normScenarioId);
-
-        const { data: ccs } = await ccQuery;
-
-        // --------- FETCH LIFE EVENTS ---------
-        let leQuery = supabase
-          .from('life_events')
-          .select('*')
-          .eq('user_id', user.id)
-          .eq('scenario_id', normScenarioId);
-
+        // 4. Fetch Life Events
+        let leQuery = supabase.from('life_events').select('*').eq('user_id', user.id);
+        leQuery = normScenarioId === null
+          ? leQuery.is('scenario_id', null)
+          : leQuery.eq('scenario_id', normScenarioId);
         const { data: lifeEvents } = await leQuery;
 
-        // --------- DATA GUARDRAILS ---------
-        const hasPaycheck = pcs && pcs.length > 0;
-        const hasCreditCard = ccs && ccs.length > 0;
-
+        // 5. Build Transaction Events Timeline
         const events = [];
         const today = startOfDay(new Date());
         const horizonEnd = addMonths(today, 6);
 
-        // -- PAYCHECK EVENTS
-        pcs.forEach(({ amount, schedule, next_date }) => {
+        // PAYCHECKS
+        (paychecks || []).forEach(({ amount, schedule, next_date, id }) => {
           let dt = parseISO(next_date);
           while (!isBefore(horizonEnd, dt)) {
             events.push({ date: startOfDay(dt), amt: +amount });
@@ -144,65 +125,65 @@ export default function Projections({ refresh, scenarioId }) {
           }
         });
 
-        // -- CREDIT CARD EVENTS
-        let totalCreditCardExpenses = 0;
-        ccs.forEach(({ next_due_date, next_due_amount, avg_future_amount }) => {
+        // CREDIT CARDS
+        (cards || []).forEach(({ next_due_date, next_due_amount, avg_future_amount }) => {
           let dt = parseISO(next_due_date);
           let first = true;
           while (!isBefore(horizonEnd, dt)) {
             const amount = first ? +next_due_amount : +avg_future_amount;
-            events.push({
-              date: startOfDay(dt),
-              amt: -amount,
-            });
-            totalCreditCardExpenses += amount;
+            events.push({ date: startOfDay(dt), amt: -amount });
             first = false;
             dt = addMonths(dt, 1);
           }
         });
 
-        // --------- LIFE EVENTS (ALL TYPES) ---------
-        if (lifeEvents && lifeEvents.length > 0) {
-          lifeEvents.forEach(event => {
-            const {
-              type, amount, start_date, end_date, recurrence
-            } = event;
-            let dt = parseISO(start_date);
-            let lastDate = end_date ? parseISO(end_date) : horizonEnd;
-            // Permanent or one-time
-            if (recurrence === 'one_time') {
-              if (!isBefore(horizonEnd, dt)) {
-                let amt = +amount;
-                if (type === 'income' || type === 'one_time_inflow') {
-                  // inflow: positive
-                } else {
-                  amt = -Math.abs(amt);
+        // LIFE EVENTS
+        (lifeEvents || []).forEach(ev => {
+          const sd = ev.start_date ? parseISO(ev.start_date) : null;
+          const ed = ev.end_date ? parseISO(ev.end_date) : null;
+          const amt = +ev.amount;
+          // Income/Expense Recurrence
+          if (ev.type === 'expense_increase' || ev.type === 'income_increase') {
+            let dt = startOfDay(sd);
+            const sign = ev.type === 'expense_increase' ? -1 : 1;
+            while (!isBefore(horizonEnd, dt) && (!ed || dt <= ed)) {
+              events.push({ date: dt, amt: sign * Math.abs(amt) });
+              if (ev.recurrence === 'weekly') dt = addWeeks(dt, 1);
+              else if (ev.recurrence === 'biweekly') dt = addWeeks(dt, 2);
+              else if (ev.recurrence === 'bimonthly') dt = addDays(dt, 15);
+              else dt = addMonths(dt, 1);
+            }
+          }
+          // One-time outflow
+          if (ev.type === 'one_time_outflow') {
+            events.push({ date: startOfDay(sd), amt: -Math.abs(amt) });
+          }
+          // Income loss (job loss)
+          if (ev.type === 'income_loss' && ev.related_paycheck_id) {
+            // Remove ALL income events for that paycheck from the event date (and for the duration, if any)
+            // Here we mark them as negative income events (simulate as extra negative flows)
+            let p = (paychecks || []).find(x => x.id === ev.related_paycheck_id);
+            if (p) {
+              let lossStart = startOfDay(sd);
+              let lossEnd = ed && ed > lossStart ? ed : horizonEnd;
+              let dt = parseISO(p.next_date);
+              // Only remove after the loss date
+              while (!isBefore(horizonEnd, dt)) {
+                if (dt >= lossStart && dt <= lossEnd) {
+                  events.push({ date: dt, amt: -Math.abs(p.amount) });
                 }
-                events.push({ date: startOfDay(dt), amt });
-              }
-            } else {
-              // Recurring between dt and lastDate
-              if (isBefore(dt, today)) dt = today; // adjust if user set a start in the past
-              for (; !isBefore(horizonEnd, dt) && !isBefore(lastDate, dt); ) {
-                let amt = +amount;
-                if (type === 'income') {
-                  // inflow: positive
-                } else {
-                  amt = -Math.abs(amt);
-                }
-                events.push({ date: startOfDay(dt), amt });
-                if (recurrence === 'weekly') dt = addWeeks(dt, 1);
-                else if (recurrence === 'biweekly') dt = addWeeks(dt, 2);
-                else if (recurrence === 'monthly') dt = addMonths(dt, 1);
+                if (p.schedule === 'weekly') dt = addWeeks(dt, 1);
+                else if (p.schedule === 'biweekly') dt = addWeeks(dt, 2);
+                else if (p.schedule === 'bimonthly') dt = addDays(dt, 15);
                 else dt = addMonths(dt, 1);
               }
             }
-          });
-        }
+          }
+        });
 
+        // Sort and simulate
         events.sort((a, b) => a.date - b.date);
 
-        // ----------- SIMULATION -----------
         const daily = [];
         let bal = +acct.current_balance;
         let minBal = bal, minDate = today, negDay = null, sim = 0, minSim = 0;
@@ -225,7 +206,6 @@ export default function Projections({ refresh, scenarioId }) {
         }
 
         const labels = [], dataBal = [], dataFlow = [], high = [], low = [], avg = [];
-
         if (view === 'daily') {
           daily.forEach((p) => {
             labels.push(format(p.date, 'MM/dd'));
@@ -278,7 +258,16 @@ export default function Projections({ refresh, scenarioId }) {
         const datasets = [];
         if (view === 'monthly') {
           datasets.push(
-            // Only show the Balance line for monthly
+            { type: 'line', label: 'Avg', data: avg, borderColor: '#3b82f6', fill: false },
+            { type: 'line', label: 'High', data: high, borderColor: '#6366f1', fill: '+1' },
+            { type: 'line', label: 'Low', data: low, borderColor: '#ef4444', fill: false },
+            {
+              type: 'bar',
+              label: 'Flow',
+              data: dataFlow,
+              yAxisID: 'y1',
+              backgroundColor: dataFlow.map((f) => (f >= 0 ? '#10b981' : '#ef4444')),
+            },
             {
               type: 'line',
               label: 'Balance',
@@ -286,19 +275,9 @@ export default function Projections({ refresh, scenarioId }) {
               yAxisID: 'y',
               borderColor: '#3b82f6',
               fill: false,
-              tension: 0.1,
-              pointRadius: 3,
-            },
-            {
-              type: 'bar',
-              label: 'Flow',
-              data: dataFlow,
-              yAxisID: 'y1',
-              backgroundColor: dataFlow.map((f) => (f >= 0 ? '#10b981' : '#ef4444')),
             }
           );
         } else {
-          // daily/weekly unchanged
           datasets.push(
             {
               type: 'line',
@@ -319,7 +298,6 @@ export default function Projections({ refresh, scenarioId }) {
             }
           );
         }
-        
 
         setChartData({ labels, datasets });
 
@@ -328,8 +306,8 @@ export default function Projections({ refresh, scenarioId }) {
         const requiredBalance = Math.max(0, -minSim).toFixed(2);
 
         let requiredPay = null;
-        if (hasPaycheck && hasCreditCard) {
-          const firstPaycheck = pcs[0];
+        if ((paychecks || []).length && (cards || []).length) {
+          const firstPaycheck = paychecks[0];
           const paycheckSchedule = firstPaycheck.schedule;
           let paycheckCount = 0;
           if (paycheckSchedule === 'weekly') {
@@ -342,7 +320,10 @@ export default function Projections({ refresh, scenarioId }) {
             paycheckCount = 6;
           }
           if (paycheckCount > 0) {
-            const totalNeeded = totalCreditCardExpenses;
+            const totalNeeded = cards.reduce(
+              (sum, c) => sum + (+c.next_due_amount || 0) + (+c.avg_future_amount || 0) * 5,
+              0
+            );
             requiredPay = (totalNeeded / paycheckCount).toFixed(2);
           }
         }
@@ -362,9 +343,7 @@ export default function Projections({ refresh, scenarioId }) {
         setLoading(false);
       }
     }
-
     run();
-    // eslint-disable-next-line
   }, [refresh, view, scenarioId]);
 
   if (loading) return <div className={styles.card}>Loading…</div>;
@@ -393,30 +372,28 @@ export default function Projections({ refresh, scenarioId }) {
           </div>
         </div>
         <div style={{ height: '320px' }}>
-        <Chart
-  data={chartData}
-  options={{
-    responsive: true,
-    maintainAspectRatio: false,
-    scales: {
-      x: { grid: { display: false }, ticks: { maxTicksLimit: 12 } },
-      y: { position: 'left', title: { display: true, text: 'Balance ($)' } },
-      y1: {
-        position: 'right', // <-- always right, not just in daily/weekly
-        title: { display: true, text: 'Flow ($)' },
-        grid: { drawOnChartArea: false },
-      },
-    },
-    plugins: {
-      legend: { position: 'top' },
-      tooltip: { mode: 'index', intersect: false },
-    },
-  }}
-/>
-
+          <Chart
+            data={chartData}
+            options={{
+              responsive: true,
+              maintainAspectRatio: false,
+              scales: {
+                x: { grid: { display: false }, ticks: { maxTicksLimit: 12 } },
+                y: { position: 'left', title: { display: true, text: 'Balance ($)' } },
+                y1: {
+                  position: view === 'monthly' ? 'right' : 'right',
+                  title: { display: true, text: 'Flow ($)' },
+                  grid: { drawOnChartArea: false }
+                }
+              },
+              plugins: {
+                legend: { position: 'top' },
+                tooltip: { mode: 'index', intersect: false },
+              },
+            }}
+          />
         </div>
       </div>
-
       <div className={styles.statsGrid}>
         <div className={styles.statCard}>
           <small>Lowest Point</small>
