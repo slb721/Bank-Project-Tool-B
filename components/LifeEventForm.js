@@ -1,12 +1,18 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import styles from '../styles/Dashboard.module.css';
 
 function normalizeScenarioId(scenarioId) {
-  return !scenarioId || scenarioId === '00000000-0000-0000-0000-000000000000' ? null : scenarioId;
+  return (
+    !scenarioId ||
+    scenarioId === '' ||
+    scenarioId === '00000000-0000-0000-0000-000000000000'
+  )
+    ? null
+    : scenarioId;
 }
 
-export default function LifeEventForm({ scenarioId, refresh, onSave }) {
+export default function LifeEventForm({ onSave, scenarioId, refresh }) {
   const [events, setEvents] = useState([]);
   const [label, setLabel] = useState('');
   const [type, setType] = useState('one_time_outflow');
@@ -16,21 +22,33 @@ export default function LifeEventForm({ scenarioId, refresh, onSave }) {
   const [recurrence, setRecurrence] = useState('');
   const [relatedPaycheckId, setRelatedPaycheckId] = useState('');
   const [editId, setEditId] = useState(null);
-  const [paychecks, setPaychecks] = useState([]);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
+  const [paychecks, setPaychecks] = useState([]);
 
   useEffect(() => { fetchEvents(); fetchPaychecks(); }, [scenarioId, refresh]);
 
   const fetchEvents = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return setEvents([]);
-    const normScenarioId = normalizeScenarioId(scenarioId);
-    let query = supabase.from('life_events').select('*').eq('user_id', user.id);
-    if (normScenarioId === null) query = query.is('scenario_id', null);
-    else query = query.eq('scenario_id', normScenarioId);
-    const { data, error } = await query.order('created_at', { ascending: false });
-    setEvents(error ? [] : (data || []));
+    setLoading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setEvents([]);
+        setLoading(false);
+        return;
+      }
+      const normScenarioId = normalizeScenarioId(scenarioId);
+      let query = supabase.from('life_events').select('*').eq('user_id', user.id);
+      if (normScenarioId === null) {
+        query = query.is('scenario_id', null);
+      } else {
+        query = query.eq('scenario_id', normScenarioId);
+      }
+      const { data, error } = await query.order('created_at', { ascending: false });
+      setEvents(error ? [] : (data || []));
+    } finally {
+      setLoading(false);
+    }
   };
 
   const fetchPaychecks = async () => {
@@ -38,8 +56,11 @@ export default function LifeEventForm({ scenarioId, refresh, onSave }) {
     if (!user) return setPaychecks([]);
     const normScenarioId = normalizeScenarioId(scenarioId);
     let query = supabase.from('paychecks').select('*').eq('user_id', user.id);
-    if (normScenarioId === null) query = query.is('scenario_id', null);
-    else query = query.eq('scenario_id', normScenarioId);
+    if (normScenarioId === null) {
+      query = query.is('scenario_id', null);
+    } else {
+      query = query.eq('scenario_id', normScenarioId);
+    }
     const { data, error } = await query.order('created_at', { ascending: false });
     setPaychecks(error ? [] : (data || []));
   };
@@ -69,13 +90,13 @@ export default function LifeEventForm({ scenarioId, refresh, onSave }) {
       const payload = {
         user_id: user.id,
         scenario_id: normScenarioId,
-        label,
         type,
+        label,
         amount: +amount,
         start_date: startDate,
         end_date: endDate || null,
         recurrence,
-        related_paycheck_id: relatedPaycheckId || null,
+        related_paycheck_id: type === 'income_loss' ? relatedPaycheckId : null,
       };
       let result;
       if (editId) {

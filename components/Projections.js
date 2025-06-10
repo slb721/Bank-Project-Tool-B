@@ -43,7 +43,13 @@ ChartJS.register(
 );
 
 function normalizeScenarioId(scenarioId) {
-  return !scenarioId || scenarioId === '00000000-0000-0000-0000-000000000000' ? null : scenarioId;
+  return (
+    !scenarioId ||
+    scenarioId === '' ||
+    scenarioId === '00000000-0000-0000-0000-000000000000'
+  )
+    ? null
+    : scenarioId;
 }
 
 export default function Projections({ refresh, scenarioId }) {
@@ -381,7 +387,7 @@ export default function Projections({ refresh, scenarioId }) {
                 x: { grid: { display: false }, ticks: { maxTicksLimit: 12 } },
                 y: { position: 'left', title: { display: true, text: 'Balance ($)' } },
                 y1: {
-                  position: view === 'monthly' ? 'right' : 'right',
+                  position: 'right',
                   title: { display: true, text: 'Flow ($)' },
                   grid: { drawOnChartArea: false }
                 }

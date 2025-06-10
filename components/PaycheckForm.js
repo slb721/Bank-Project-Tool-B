@@ -3,7 +3,13 @@ import { supabase } from '../lib/supabaseClient';
 import styles from '../styles/Dashboard.module.css';
 
 function normalizeScenarioId(scenarioId) {
-  return !scenarioId || scenarioId === '00000000-0000-0000-0000-000000000000' ? null : scenarioId;
+  return (
+    !scenarioId ||
+    scenarioId === '' ||
+    scenarioId === '00000000-0000-0000-0000-000000000000'
+  )
+    ? null
+    : scenarioId;
 }
 
 export default function PaycheckForm({ onSave, scenarioId, refresh }) {
