@@ -264,7 +264,7 @@ export default function Projections({ refresh, scenarioId }) {
         const datasets = [];
         if (view === 'monthly') {
           datasets.push(
-            { type: 'line', label: 'Avg', data: avg, borderColor: '#3b82f6', fill: false },
+            { type: 'line', label: 'Avg', data: avg, borderColor: '#ff9900', fill: false, order: 10, borderWidth: 3 },
             { type: 'line', label: 'High', data: high, borderColor: '#6366f1', fill: '+1' },
             { type: 'line', label: 'Low', data: low, borderColor: '#ef4444', fill: false },
             {
@@ -273,13 +273,14 @@ export default function Projections({ refresh, scenarioId }) {
               data: dataFlow,
               yAxisID: 'y1',
               backgroundColor: dataFlow.map((f) => (f >= 0 ? '#10b981' : '#ef4444')),
+              order: 1
             },
             {
               type: 'line',
               label: 'Balance',
               data: dataBal,
               yAxisID: 'y',
-              borderColor: '#ff9900',
+              borderColor: '#3b82f6',
               fill: false,
               order: 100,
               borderWidth: 3
@@ -292,7 +293,7 @@ export default function Projections({ refresh, scenarioId }) {
               label: 'Balance',
               data: dataBal,
               yAxisID: 'y',
-              borderColor: '#ff9900',
+              borderColor: '#3b82f6',
               fill: false,
               tension: 0.1,
               pointRadius: view === 'daily' ? 0 : 3,
@@ -305,6 +306,7 @@ export default function Projections({ refresh, scenarioId }) {
               data: dataFlow,
               yAxisID: 'y1',
               backgroundColor: dataFlow.map((f) => (f >= 0 ? '#10b981' : '#ef4444')),
+              order: 1
             }
           );
         }
@@ -373,9 +375,24 @@ export default function Projections({ refresh, scenarioId }) {
       <div className={styles.chartWide}>
         <div className={styles.chartHeader}>
           <h3 className={styles.chartTitle}>6-Month Projection</h3>
-          <div className={styles.btnGroup} style={{ display: 'flex', gap: '10px' }}>
+          <div className={styles.btnGroup} style={{ display: 'flex', gap: '12px', marginTop: 4 }}>
             {['daily', 'weekly', 'monthly'].map((v) => (
-              <button key={v} onClick={() => setView(v)} className={view === v ? styles.active : ''}>
+              <button
+                key={v}
+                onClick={() => setView(v)}
+                className={view === v ? styles.active : ''}
+                style={{
+                  marginRight: 0,
+                  marginLeft: 0,
+                  minWidth: 70,
+                  borderRadius: 7,
+                  border: '1px solid #3b82f6',
+                  background: view === v ? '#e6f0ff' : '#f7faff',
+                  color: '#225099',
+                  fontWeight: 600,
+                  letterSpacing: 0.5
+                }}
+              >
                 {v[0].toUpperCase() + v.slice(1)}
               </button>
             ))}
